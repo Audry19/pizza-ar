@@ -1,206 +1,200 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pizza AR Menu</title>
 
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pizza AR Menu</title>
 
-    <style>
-      body { margin: 0; overflow: hidden; font-family: sans-serif; }
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
-      /* Top label showing pizza name */
-      #pizza-label {
-        position: fixed;
-        top: 24px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.72);
-        color: white;
-        padding: 10px 28px;
-        border-radius: 30px;
-        font-size: 18px;
-        font-weight: bold;
-        z-index: 999;
-        white-space: nowrap;
-      }
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
 
-      /* Bottom instruction bubble */
-      #instructions {
-        position: fixed;
-        bottom: 110px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.6);
-        color: white;
-        padding: 10px 22px;
-        border-radius: 30px;
-        font-size: 14px;
-        z-index: 999;
-        pointer-events: none;
-        text-align: center;
-        white-space: nowrap;
-      }
+    /* Top label showing pizza name */
+    #pizza-label {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.72);
+      color: white;
+      padding: 10px 28px;
+      border-radius: 30px;
+      font-size: 18px;
+      font-weight: bold;
+      z-index: 999;
+      white-space: nowrap;
+    }
 
-      /* Switch pizza button */
-      #switch-btn {
-        position: fixed;
-        bottom: 40px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #e63946;
-        color: white;
-        border: none;
-        padding: 16px 40px;
-        border-radius: 30px;
-        font-size: 16px;
-        font-weight: bold;
-        cursor: pointer;
-        z-index: 999;
-        box-shadow: 0 4px 15px rgba(230,57,70,0.4);
-      }
+    /* Bottom instruction bubble */
+    #instructions {
+      position: fixed;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      padding: 10px 22px;
+      border-radius: 30px;
+      font-size: 14px;
+      z-index: 999;
+      pointer-events: none;
+      text-align: center;
+      white-space: nowrap;
+    }
 
-      /* Debug box — shows what's happening (we remove this later) */
-      #debug {
-        position: fixed;
-        top: 80px;
-        left: 12px;
-        background: rgba(0,0,0,0.6);
-        color: #00ff88;
-        padding: 8px 12px;
-        border-radius: 10px;
-        font-size: 11px;
-        z-index: 999;
-        pointer-events: none;
-        max-width: 200px;
-        line-height: 1.6;
-      }
-    </style>
-  </head>
+    /* Switch pizza button */
+    #switch-btn {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #e63946;
+      color: white;
+      border: none;
+      padding: 16px 40px;
+      border-radius: 30px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 999;
+      box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4);
+    }
 
-  <body>
-    <div id="pizza-label">BBQ Chicken Pizza</div>
-    <div id="instructions">Tap anywhere to place pizza</div>
-    <div id="debug">Status: loading...</div>
-    <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
+    /* Debug box — shows what's happening (we remove this later) */
+    #debug {
+      position: fixed;
+      top: 80px;
+      left: 12px;
+      background: rgba(0, 0, 0, 0.6);
+      color: #00ff88;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 11px;
+      z-index: 999;
+      pointer-events: none;
+      max-width: 200px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
 
-    <a-scene
-      embedded
-      arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
-      renderer="logarithmicDepthBuffer: true; colorManagement: true;"
-      vr-mode-ui="enabled: false"
-      loading-screen="dotsColor: white; backgroundColor: black"
-    >
-      <!-- Preload all images here FIRST — this is what was missing -->
-      <a-assets timeout="10000">
-        <img id="img-bbq"         src="images/bbq-chicken.jpg"  crossorigin="anonymous" />
-        <img id="img-pepperoni"   src="images/pepperoni.jpg"    crossorigin="anonymous" />
-        <img id="img-margherita"  src="images/margherita.jpg"   crossorigin="anonymous" />
-      </a-assets>
+<body>
+  <div id="pizza-label">BBQ Chicken Pizza</div>
+  <div id="instructions">Tap anywhere to place pizza</div>
+  <div id="debug">Status: loading...</div>
+  <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
 
-      <!-- 
+  <a-scene embedded arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
+    renderer="logarithmicDepthBuffer: true; colorManagement: true;" vr-mode-ui="enabled: false"
+    loading-screen="dotsColor: white; backgroundColor: black">
+    <!-- Preload all images here FIRST — this is what was missing -->
+    <a-assets timeout="10000">
+      <img id="img-bbq" src="images/bbq-chicken.png" crossorigin="anonymous" />
+      <img id="img-pepperoni" src="images/pepperoni.png" crossorigin="anonymous" />
+      <img id="img-margherita" src="images/margherita.png" crossorigin="anonymous" />
+    </a-assets>
+
+    <!-- 
         The pizza plane — flat on the table
         rotation="-90 0 0" makes it lie flat (face up)
         width/height="0.25" = about 25cm — adjust if too small/big
         visible="false" until customer taps
       -->
-      <a-plane
-        id="pizza-plane"
-        src="#img-bbq"
-        width="0.25"
-        height="0.25"
-        rotation="-90 0 0"
-        position="0 0 -0.5"
-        visible="false"
-        material="transparent: true; alphaTest: 0.1; side: double;"
-      ></a-plane>
+    <a-plane id="pizza-plane" src="#img-bbq" width="0.25" height="0.25" rotation="-90 0 0" position="0 0 -0.5"
+      visible="false" material="transparent: true; alphaTest: 0.1; side: double;"></a-plane>
 
-      <a-entity camera></a-entity>
-    </a-scene>
+    <a-entity camera></a-entity>
+  </a-scene>
 
-    <script>
-      // ---- Pizza data ----
-      const pizzas = [
-        { name: "BBQ Chicken Pizza",  imgId: "#img-bbq"        },
-        { name: "Pepperoni Pizza",    imgId: "#img-pepperoni"  },
-        { name: "Margherita Pizza",   imgId: "#img-margherita" }
-      ];
+  <script>
+    // ---- Pizza data ----
+    const pizzas = [
+      { name: "BBQ Chicken Pizza", imgId: "#img-bbq" },
+      { name: "Pepperoni Pizza", imgId: "#img-pepperoni" },
+      { name: "Margherita Pizza", imgId: "#img-margherita" }
+    ];
 
-      let currentIndex = 0;
-      let placed = false;
+    let currentIndex = 0;
+    let placed = false;
 
-      const plane  = document.getElementById("pizza-plane");
-      const label  = document.getElementById("pizza-label");
-      const instr  = document.getElementById("instructions");
-      const debug  = document.getElementById("debug");
+    const plane = document.getElementById("pizza-plane");
+    const label = document.getElementById("pizza-label");
+    const instr = document.getElementById("instructions");
+    const debug = document.getElementById("debug");
 
-      // ---- Wait for A-Frame scene to load ----
-      const scene = document.querySelector("a-scene");
+    // ---- Wait for A-Frame scene to load ----
+    const scene = document.querySelector("a-scene");
 
-      scene.addEventListener("loaded", function () {
-        debug.textContent = "Scene ready!\nTap to place pizza.";
-      });
+    scene.addEventListener("loaded", function () {
+      debug.textContent = "Scene ready!\nTap to place pizza.";
+    });
 
-      // ---- Handle tap — works on both phone (touch) and desktop (click) ----
-      function handleTap(e) {
-        // Ignore if they tapped the Switch button
-        if (e.target.id === "switch-btn") return;
+    // ---- Handle tap — works on both phone (touch) and desktop (click) ----
+    function handleTap(e) {
+      // Ignore if they tapped the Switch button
+      if (e.target.id === "switch-btn") return;
 
-        if (!placed) {
-          plane.setAttribute("visible", "true");
-          instr.textContent = "Tap to move · Pinch to resize";
-          debug.textContent = "Pizza placed!\nSwitch button changes pizza.";
-          placed = true;
-        } else {
-          // Move pizza to wherever they tapped
-          // Gets the approximate position from the camera
-          const cam = document.querySelector("[camera]");
-          const pos = cam.getAttribute("position");
-          plane.setAttribute("position", {
-            x: pos.x,
-            y: pos.y - 0.3,
-            z: pos.z - 0.5
-          });
-        }
+      if (!placed) {
+        plane.setAttribute("visible", "true");
+        instr.textContent = "Tap to move · Pinch to resize";
+        debug.textContent = "Pizza placed!\nSwitch button changes pizza.";
+        placed = true;
+      } else {
+        // Move pizza to wherever they tapped
+        // Gets the approximate position from the camera
+        const cam = document.querySelector("[camera]");
+        const pos = cam.getAttribute("position");
+        plane.setAttribute("position", {
+          x: pos.x,
+          y: pos.y - 0.3,
+          z: pos.z - 0.5
+        });
       }
+    }
 
-      // Listen for BOTH touch (mobile) and click (desktop)
-      document.addEventListener("touchend", handleTap, { passive: true });
-      document.addEventListener("click",    handleTap);
+    // Listen for BOTH touch (mobile) and click (desktop)
+    document.addEventListener("touchend", handleTap, { passive: true });
+    document.addEventListener("click", handleTap);
 
-      // ---- Switch pizza function ----
-      function switchPizza() {
-        currentIndex = (currentIndex + 1) % pizzas.length;
-        const p = pizzas[currentIndex];
-        plane.setAttribute("src", p.imgId);
-        label.textContent = p.name;
-        debug.textContent = "Switched to:\n" + p.name;
-      }
+    // ---- Switch pizza function ----
+    function switchPizza() {
+      currentIndex = (currentIndex + 1) % pizzas.length;
+      const p = pizzas[currentIndex];
+      plane.setAttribute("src", p.imgId);
+      label.textContent = p.name;
+      debug.textContent = "Switched to:\n" + p.name;
+    }
 
-      // ---- Pinch to resize (two fingers) ----
-      let lastPinchDist = null;
+    // ---- Pinch to resize (two fingers) ----
+    let lastPinchDist = null;
 
-      document.addEventListener("touchmove", function(e) {
-        if (e.touches.length === 2) {
-          const dx = e.touches[0].clientX - e.touches[1].clientX;
-          const dy = e.touches[0].clientY - e.touches[1].clientY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+    document.addEventListener("touchmove", function (e) {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-          if (lastPinchDist !== null) {
-            const scale = dist / lastPinchDist;
-            const cur = plane.getAttribute("scale") || { x: 1, y: 1, z: 1 };
-            const newS = Math.min(Math.max(cur.x * scale, 0.05), 3);
-            plane.setAttribute("scale", { x: newS, y: newS, z: newS });
-          }
-          lastPinchDist = dist;
+        if (lastPinchDist !== null) {
+          const scale = dist / lastPinchDist;
+          const cur = plane.getAttribute("scale") || { x: 1, y: 1, z: 1 };
+          const newS = Math.min(Math.max(cur.x * scale, 0.05), 3);
+          plane.setAttribute("scale", { x: newS, y: newS, z: newS });
         }
-      }, { passive: true });
+        lastPinchDist = dist;
+      }
+    }, { passive: true });
 
-      document.addEventListener("touchend", function(e) {
-        if (e.touches.length < 2) lastPinchDist = null;
-      }, { passive: true });
-    </script>
-  </body>
+    document.addEventListener("touchend", function (e) {
+      if (e.touches.length < 2) lastPinchDist = null;
+    }, { passive: true });
+  </script>
+</body>
+
 </html>
