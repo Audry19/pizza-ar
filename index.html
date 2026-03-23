@@ -1,293 +1,335 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pizza AR Menu</title>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Pizza AR Menu</title>
+  <style>
 
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    <style>
-      body { margin: 0; overflow: hidden; font-family: sans-serif; }
+    body {
+      background: #000;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      touch-action: none;
+    }
 
-      #pizza-label {
-        position: fixed;
-        top: 24px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.78);
-        color: white;
-        padding: 10px 28px;
-        border-radius: 30px;
-        font-size: 18px;
-        font-weight: bold;
-        z-index: 999;
-        white-space: nowrap;
+    /* CAMERA — fills full screen as background */
+    #camera {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    /* START SCREEN — shown before camera opens */
+    #start-screen {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 30px;
+      text-align: center;
+      color: white;
+    }
+    #start-screen .emoji { font-size: 64px; }
+    #start-screen h1 { font-size: 26px; font-weight: bold; }
+    #start-screen p  { font-size: 14px; opacity: 0.7; line-height: 1.6; }
+    #start-btn {
+      margin-top: 10px;
+      background: #e63946;
+      color: white;
+      border: none;
+      padding: 18px 50px;
+      border-radius: 40px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    /* PIZZA NAME — top label */
+    #pizza-label {
+      position: fixed;
+      top: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75);
+      color: white;
+      padding: 10px 28px;
+      border-radius: 40px;
+      font-size: 18px;
+      font-weight: bold;
+      z-index: 50;
+      white-space: nowrap;
+      display: none;
+    }
+
+    /* INGREDIENTS — below name */
+    #ingredients {
+      position: fixed;
+      top: 78px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.55);
+      color: #ffd166;
+      padding: 5px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      z-index: 50;
+      white-space: nowrap;
+      display: none;
+    }
+
+    /* INSTRUCTION bubble */
+    #instructions {
+      position: fixed;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.65);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      z-index: 50;
+      pointer-events: none;
+      text-align: center;
+      width: 85%;
+      line-height: 1.5;
+      display: none;
+    }
+
+    /* SWITCH BUTTON */
+    #switch-btn {
+      position: fixed;
+      bottom: 44px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #e63946;
+      color: white;
+      border: none;
+      padding: 16px 44px;
+      border-radius: 40px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 50;
+      display: none;
+    }
+
+    /* PIZZA IMAGE WRAPPER — positioned wherever user taps */
+    #pizza-wrap {
+      position: fixed;
+      z-index: 20;
+      display: none;
+      /* perspective makes rotateX look like 3D depth */
+      perspective: 500px;
+      perspective-origin: 50% 0%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* PIZZA IMAGE — rotateX makes it look flat on the table */
+    #pizza-img {
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: block;
+      transform: rotateX(65deg);
+      transform-origin: center center;
+      filter: drop-shadow(0 20px 30px rgba(0,0,0,0.6));
+      transition: opacity 0.3s;
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- ── START SCREEN ── -->
+  <div id="start-screen">
+    <div class="emoji">🍕</div>
+    <h1>Pizza AR Menu</h1>
+    <p>Point your camera at the table<br>and tap to place a pizza</p>
+    <button id="start-btn" onclick="startCamera()">Open Camera</button>
+  </div>
+
+  <!-- ── LIVE CAMERA ── -->
+  <video id="camera" autoplay playsinline muted></video>
+
+  <!-- ── UI ELEMENTS (shown after camera starts) ── -->
+  <div id="pizza-label">BBQ Chicken Pizza</div>
+  <div id="ingredients">BBQ sauce · Chicken · Olives · Bell peppers · Mozzarella</div>
+  <div id="instructions">👆 Tap the table to place the pizza</div>
+  <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
+
+  <!-- ── PIZZA IMAGE ── -->
+  <div id="pizza-wrap">
+    <img id="pizza-img" src="images/bbq-chicken.png" alt="pizza" />
+  </div>
+
+  <script>
+
+    // ── Pizza menu data ────────────────────────────────────
+    const pizzas = [
+      {
+        name:        "BBQ Chicken Pizza",
+        image:       "images/bbq-chicken.png",
+        ingredients: "BBQ sauce · Chicken · Olives · Bell peppers · Mozzarella"
+      },
+      {
+        name:        "Pepperoni Pizza",
+        image:       "images/pepperoni.png",
+        ingredients: "Tomato sauce · Pepperoni · Mozzarella · Oregano · Basil"
+      },
+      {
+        name:        "Margherita Pizza",
+        image:       "images/margherita.png",
+        ingredients: "Tomato sauce · Fresh mozzarella · Basil · Olive oil"
       }
+    ];
 
-      #instructions {
-        position: fixed;
-        bottom: 110px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.72);
-        color: white;
-        padding: 12px 24px;
-        border-radius: 30px;
-        font-size: 15px;
-        z-index: 999;
-        pointer-events: none;
-        text-align: center;
-        width: 82%;
-        line-height: 1.5;
+    let currentIndex = 0;
+    let pizzaPlaced  = false;
+
+    // ── DOM references ─────────────────────────────────────
+    const cameraEl      = document.getElementById("camera");
+    const startScreen   = document.getElementById("start-screen");
+    const pizzaWrap     = document.getElementById("pizza-wrap");
+    const pizzaImg      = document.getElementById("pizza-img");
+    const labelEl       = document.getElementById("pizza-label");
+    const ingEl         = document.getElementById("ingredients");
+    const instrEl       = document.getElementById("instructions");
+    const switchBtn     = document.getElementById("switch-btn");
+
+    // ── STEP 1: Open camera ────────────────────────────────
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },  // back camera
+            width:      { ideal: 1280 },
+            height:     { ideal: 720  }
+          },
+          audio: false
+        });
+
+        cameraEl.srcObject = stream;
+        await cameraEl.play();
+
+        // Hide start screen, show UI
+        startScreen.style.display   = "none";
+        labelEl.style.display       = "block";
+        ingEl.style.display         = "block";
+        instrEl.style.display       = "block";
+        switchBtn.style.display     = "block";
+
+      } catch (err) {
+        document.getElementById("start-screen").innerHTML =
+          "<div style='color:white; padding:30px; text-align:center; line-height:2'>" +
+          "<div style='font-size:40px'>❌</div>" +
+          "<b>Camera access was blocked</b><br><br>" +
+          "On iPhone: go to<br><b>Settings → Safari → Camera</b><br>and set it to <b>Allow</b><br><br>" +
+          "Then reload this page." +
+          "</div>";
       }
+    }
 
-      #switch-btn {
-        position: fixed;
-        bottom: 40px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #e63946;
-        color: white;
-        border: none;
-        padding: 16px 40px;
-        border-radius: 30px;
-        font-size: 16px;
-        font-weight: bold;
-        cursor: pointer;
-        z-index: 999;
+    // ── STEP 2: Tap to place pizza ─────────────────────────
+    //
+    // HOW THE FLAT LOOK WORKS:
+    // rotateX(65deg) tilts the image backward — like looking at
+    // a circle on the floor from above. The perspective CSS makes
+    // it look 3D. The phone's physical tilt (deviceorientation)
+    // adjusts the angle automatically so it always looks right.
+
+    function placePizza(x, y) {
+      pizzaWrap.style.left    = x + "px";
+      pizzaWrap.style.top     = y + "px";
+      pizzaWrap.style.display = "block";
+
+      if (!pizzaPlaced) {
+        pizzaPlaced = true;
+        instrEl.textContent = "Tap to move  ·  Pinch to resize";
       }
+    }
 
-      #debug {
-        position: fixed;
-        top: 16px;
-        left: 8px;
-        right: 8px;
-        background: rgba(0,0,0,0.85);
-        color: #00ff88;
-        padding: 10px 14px;
-        border-radius: 12px;
-        font-size: 11px;
-        z-index: 999;
-        pointer-events: none;
-        line-height: 1.9;
-      }
-    </style>
-  </head>
+    // Touch (phone)
+    document.addEventListener("touchstart", function(e) {
+      if (e.target.closest("button")) return;
+      if (startScreen.style.display !== "none") return;
+      const t = e.touches[0];
+      placePizza(t.clientX, t.clientY);
+    }, { passive: true });
 
-  <body>
-    <div id="pizza-label">BBQ Chicken Pizza</div>
-    <div id="debug">🔄 Loading...</div>
-    <div id="instructions">👇 Point at the table then tap to place pizza</div>
-    <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
+    // Click (desktop testing)
+    document.addEventListener("click", function(e) {
+      if (e.target.closest("button")) return;
+      if (startScreen.style.display !== "none") return;
+      placePizza(e.clientX, e.clientY);
+    });
 
-    <a-scene
-      embedded
-      arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
-      renderer="logarithmicDepthBuffer: true;"
-      vr-mode-ui="enabled: false"
-    >
-      <a-assets timeout="20000">
-        <img id="img-bbq"        src="images/bbq-chicken.png"  crossorigin="anonymous" />
-        <img id="img-pepperoni"  src="images/pepperoni.png"    crossorigin="anonymous" />
-        <img id="img-margherita" src="images/margherita.png"   crossorigin="anonymous" />
-      </a-assets>
+    // ── STEP 3: Auto-adjust tilt to match phone angle ──────
+    // When you hold phone flat = pizza looks very flat (high rotateX)
+    // When you hold phone upright = pizza looks more upright (lower rotateX)
 
-      <!--
-        THE KEY TECHNIQUE:
-        The pizza plane is a CHILD of the camera.
-        position="0 -0.4 -0.8" means:
-          0    = centred left/right
-         -0.4  = 0.4m BELOW the camera (so it appears on the table surface)
-         -0.8  = 0.8m IN FRONT of the camera (negative Z = forward in A-Frame)
+    window.addEventListener("deviceorientation", function(e) {
+      if (e.beta === null) return;
+      // beta: 0 = face up, 90 = upright, 135+ = angled toward floor
+      // Map beta range 70–150 to rotateX range 45–80 degrees
+      const beta    = Math.min(Math.max(e.beta, 70), 150);
+      const rotateX = 45 + ((beta - 70) / 80) * 35;
+      pizzaImg.style.transform = "rotateX(" + rotateX.toFixed(1) + "deg)";
+    }, true);
 
-        Because it is attached to the camera, it ALWAYS appears
-        in the same spot on screen no matter how you tilt or rotate.
-        When the user taps, we detach it and freeze it in world space.
-      -->
-      <a-camera id="main-camera" look-controls-enabled="false">
+    // ── STEP 4: Switch pizza ───────────────────────────────
+    function switchPizza() {
+      currentIndex = (currentIndex + 1) % pizzas.length;
+      const p = pizzas[currentIndex];
 
-        <!-- Preview disc — red circle attached to camera so always visible -->
-        <a-cylinder
-          id="preview-disc"
-          color="#FF0000"
-          radius="0.25"
-          height="0.01"
-          position="0 -0.4 -0.8"
-          visible="true"
-          opacity="0.7"
-        ></a-cylinder>
+      // Fade out → swap → fade in
+      pizzaImg.style.opacity = "0";
+      setTimeout(() => {
+        pizzaImg.src        = p.image;
+        labelEl.textContent = p.name;
+        ingEl.textContent   = p.ingredients;
+        pizzaImg.style.opacity = "1";
+      }, 300);
+    }
 
-        <!-- Preview pizza image — follows camera -->
-        <a-plane
-          id="preview-plane"
-          src="#img-bbq"
-          width="0.5"
-          height="0.5"
-          rotation="-90 0 0"
-          position="0 -0.4 -0.8"
-          visible="false"
-          material="transparent: true; alphaTest: 0.1; side: double; shader: flat;"
-        ></a-plane>
+    // ── STEP 5: Pinch to resize ────────────────────────────
+    let lastPinchDist = null;
+    let currentSize   = 240;
 
-      </a-camera>
+    document.addEventListener("touchmove", function(e) {
+      if (e.touches.length === 2) {
+        const dx   = e.touches[0].clientX - e.touches[1].clientX;
+        const dy   = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-      <!-- Placed disc — frozen in world space after tap -->
-      <a-cylinder
-        id="placed-disc"
-        color="#FF0000"
-        radius="0.25"
-        height="0.01"
-        visible="false"
-      ></a-cylinder>
-
-      <!-- Placed pizza — frozen in world space after tap -->
-      <a-plane
-        id="placed-plane"
-        width="0.5"
-        height="0.5"
-        rotation="-90 0 0"
-        visible="false"
-        material="transparent: true; alphaTest: 0.1; side: double; shader: flat;"
-      ></a-plane>
-
-    </a-scene>
-
-    <script>
-
-      // ── Debug helpers ─────────────────────────────────────
-      const debugEl = document.getElementById("debug");
-      function setLog(msg) { debugEl.innerHTML = msg; }
-      function log(msg)    { debugEl.innerHTML += "<br>" + msg; }
-
-      // ── Track image loading ───────────────────────────────
-      let loadedCount = 0;
-      document.querySelectorAll("a-assets img").forEach(img => {
-        const name = img.src.split("/").pop();
-        img.addEventListener("load",  () => { loadedCount++; log("✅ " + name); });
-        img.addEventListener("error", () => log("❌ MISSING: " + name));
-      });
-
-      document.querySelector("a-scene").addEventListener("loaded", () => {
-        setLog("✅ Scene ready | " + loadedCount + "/3 images loaded");
-        log("🔴 Red circle preview = attached to your camera");
-        log("👇 Point at table, then tap to freeze it there");
-      });
-
-      // ── Elements ──────────────────────────────────────────
-      const previewDisc  = document.getElementById("preview-disc");
-      const previewPlane = document.getElementById("preview-plane");
-      const placedDisc   = document.getElementById("placed-disc");
-      const placedPlane  = document.getElementById("placed-plane");
-      const instr        = document.getElementById("instructions");
-      const label        = document.getElementById("pizza-label");
-
-      let placed       = false;
-      let showingImage = false; // false = show test disc, true = show pizza image
-
-      // ── Tap to freeze pizza in place ──────────────────────
-      //
-      // HOW THIS WORKS:
-      // 1. Before tap: red disc/pizza follows the camera (child of camera)
-      // 2. On tap: read the world position of the preview using Three.js
-      // 3. Copy that world position onto the placed object (not child of camera)
-      // 4. Hide the preview, show the placed version — now frozen on table
-
-      function handleTap(e) {
-        if (e.target.closest("button")) return;
-
-        // Get the REAL world position of the preview disc
-        // getWorldPosition() gives us where it actually is in 3D space
-        const worldPos = new THREE.Vector3();
-        previewDisc.object3D.getWorldPosition(worldPos);
-
-        log("📍 Freezing at world pos: " +
-            worldPos.x.toFixed(2) + ", " +
-            worldPos.y.toFixed(2) + ", " +
-            worldPos.z.toFixed(2));
-
-        // Copy world position to the placed objects
-        placedDisc.setAttribute("position",  worldPos);
-        placedPlane.setAttribute("position", worldPos);
-
-        // Show placed version, hide preview
-        placedDisc.setAttribute("visible",   !showingImage);
-        placedPlane.setAttribute("visible",  showingImage);
-
-        // Hide the camera-attached preview
-        previewDisc.setAttribute("visible",  false);
-        previewPlane.setAttribute("visible", false);
-
-        placed = true;
-        instr.textContent = "🔴 Can you see the red circle on the table?";
-        log("✅ Placed! Can you see the red disc?");
-      }
-
-      document.addEventListener("touchend", handleTap, { passive: true });
-      document.addEventListener("click",    handleTap);
-
-      // ── Switch pizza ──────────────────────────────────────
-      const pizzas = [
-        { name: "BBQ Chicken Pizza",  id: "#img-bbq"        },
-        { name: "Pepperoni Pizza",    id: "#img-pepperoni"  },
-        { name: "Margherita Pizza",   id: "#img-margherita" }
-      ];
-      let pizzaIndex = 0;
-
-      function switchPizza() {
-        pizzaIndex = (pizzaIndex + 1) % pizzas.length;
-        const p = pizzas[pizzaIndex];
-
-        // Update both preview and placed
-        previewPlane.setAttribute("src", p.id);
-        placedPlane.setAttribute("src",  p.id);
-        label.textContent = p.name;
-        log("🍕 → " + p.name);
-      }
-
-      // ── Toggle test disc / pizza image (tap label to switch) ─
-      document.getElementById("pizza-label").addEventListener("click", () => {
-        showingImage = !showingImage;
-
-        if (!placed) {
-          // Toggle preview mode
-          previewDisc.setAttribute("visible",  !showingImage);
-          previewPlane.setAttribute("visible", showingImage);
-        } else {
-          // Toggle placed mode
-          placedDisc.setAttribute("visible",   !showingImage);
-          placedPlane.setAttribute("visible",  showingImage);
+        if (lastPinchDist !== null) {
+          const ratio = dist / lastPinchDist;
+          currentSize = Math.min(Math.max(currentSize * ratio, 80), 500);
+          pizzaImg.style.width  = currentSize + "px";
+          pizzaImg.style.height = currentSize + "px";
         }
+        lastPinchDist = dist;
+      }
+    }, { passive: true });
 
-        log(showingImage ? "🍕 Showing pizza image" : "🔴 Showing test disc");
-      });
+    document.addEventListener("touchend", function(e) {
+      if (e.touches.length < 2) lastPinchDist = null;
+    }, { passive: true });
 
-      // ── Pinch to resize ───────────────────────────────────
-      let lastPinch = null;
-      document.addEventListener("touchmove", e => {
-        if (e.touches.length === 2) {
-          const dx   = e.touches[0].clientX - e.touches[1].clientX;
-          const dy   = e.touches[0].clientY - e.touches[1].clientY;
-          const dist = Math.sqrt(dx*dx + dy*dy);
-          if (lastPinch) {
-            const ratio = dist / lastPinch;
-            const target = placed ? placedDisc : previewDisc;
-            const cur    = target.getAttribute("scale") || {x:1,y:1,z:1};
-            const s      = Math.min(Math.max(cur.x * ratio, 0.1), 8);
-            placedDisc.setAttribute("scale",   {x:s, y:s, z:s});
-            placedPlane.setAttribute("scale",  {x:s, y:s, z:s});
-            previewDisc.setAttribute("scale",  {x:s, y:s, z:s});
-            previewPlane.setAttribute("scale", {x:s, y:s, z:s});
-          }
-          lastPinch = dist;
-        }
-      }, { passive: true });
-
-      document.addEventListener("touchend", e => {
-        if (e.touches.length < 2) lastPinch = null;
-      }, { passive: true });
-
-    </script>
-  </body>
+  </script>
+</body>
 </html>
