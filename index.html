@@ -16,7 +16,7 @@
         top: 24px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(0,0,0,0.75);
+        background: rgba(0,0,0,0.78);
         color: white;
         padding: 10px 28px;
         border-radius: 30px;
@@ -31,15 +31,16 @@
         bottom: 110px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(0,0,0,0.7);
+        background: rgba(0,0,0,0.72);
         color: white;
-        padding: 10px 24px;
+        padding: 12px 24px;
         border-radius: 30px;
-        font-size: 14px;
+        font-size: 15px;
         z-index: 999;
         pointer-events: none;
         text-align: center;
-        width: 80%;
+        width: 82%;
+        line-height: 1.5;
       }
 
       #switch-btn {
@@ -71,8 +72,6 @@
         z-index: 999;
         pointer-events: none;
         line-height: 1.9;
-        max-height: 40vh;
-        overflow: hidden;
       }
     </style>
   </head>
@@ -80,7 +79,7 @@
   <body>
     <div id="pizza-label">BBQ Chicken Pizza</div>
     <div id="debug">🔄 Loading...</div>
-    <div id="instructions">👇 Point phone at floor then tap</div>
+    <div id="instructions">👇 Point at the table then tap to place pizza</div>
     <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
 
     <a-scene
@@ -95,18 +94,57 @@
         <img id="img-margherita" src="images/margherita.png"   crossorigin="anonymous" />
       </a-assets>
 
-      <!-- Flat red disc for testing placement -->
+      <!--
+        THE KEY TECHNIQUE:
+        The pizza plane is a CHILD of the camera.
+        position="0 -0.4 -0.8" means:
+          0    = centred left/right
+         -0.4  = 0.4m BELOW the camera (so it appears on the table surface)
+         -0.8  = 0.8m IN FRONT of the camera (negative Z = forward in A-Frame)
+
+        Because it is attached to the camera, it ALWAYS appears
+        in the same spot on screen no matter how you tilt or rotate.
+        When the user taps, we detach it and freeze it in world space.
+      -->
+      <a-camera id="main-camera" look-controls-enabled="false">
+
+        <!-- Preview disc — red circle attached to camera so always visible -->
+        <a-cylinder
+          id="preview-disc"
+          color="#FF0000"
+          radius="0.25"
+          height="0.01"
+          position="0 -0.4 -0.8"
+          visible="true"
+          opacity="0.7"
+        ></a-cylinder>
+
+        <!-- Preview pizza image — follows camera -->
+        <a-plane
+          id="preview-plane"
+          src="#img-bbq"
+          width="0.5"
+          height="0.5"
+          rotation="-90 0 0"
+          position="0 -0.4 -0.8"
+          visible="false"
+          material="transparent: true; alphaTest: 0.1; side: double; shader: flat;"
+        ></a-plane>
+
+      </a-camera>
+
+      <!-- Placed disc — frozen in world space after tap -->
       <a-cylinder
-        id="test-disc"
+        id="placed-disc"
         color="#FF0000"
-        radius="0.3"
-        height="0.02"
+        radius="0.25"
+        height="0.01"
         visible="false"
       ></a-cylinder>
 
-      <!-- Pizza image plane — shown after test works -->
+      <!-- Placed pizza — frozen in world space after tap -->
       <a-plane
-        id="pizza-plane"
+        id="placed-plane"
         width="0.5"
         height="0.5"
         rotation="-90 0 0"
@@ -114,17 +152,16 @@
         material="transparent: true; alphaTest: 0.1; side: double; shader: flat;"
       ></a-plane>
 
-      <a-camera id="main-camera" look-controls-enabled="false"></a-camera>
     </a-scene>
 
     <script>
 
-      // ── Debug helper ──────────────────────────────────────
+      // ── Debug helpers ─────────────────────────────────────
       const debugEl = document.getElementById("debug");
       function setLog(msg) { debugEl.innerHTML = msg; }
       function log(msg)    { debugEl.innerHTML += "<br>" + msg; }
 
-      // ── Image loading ─────────────────────────────────────
+      // ── Track image loading ───────────────────────────────
       let loadedCount = 0;
       document.querySelectorAll("a-assets img").forEach(img => {
         const name = img.src.split("/").pop();
@@ -134,114 +171,57 @@
 
       document.querySelector("a-scene").addEventListener("loaded", () => {
         setLog("✅ Scene ready | " + loadedCount + "/3 images loaded");
-        log("👇 Point phone at floor then tap");
+        log("🔴 Red circle preview = attached to your camera");
+        log("👇 Point at table, then tap to freeze it there");
       });
 
-      // ── KEY FIX: Read REAL device tilt from phone sensors ─
-      // AR.js controls the camera internally and never shares
-      // its rotation with Three.js getWorldDirection() — that
-      // is why we kept getting Dir Y=0.00 in previous versions.
-      // Solution: read the phone's physical gyroscope directly.
+      // ── Elements ──────────────────────────────────────────
+      const previewDisc  = document.getElementById("preview-disc");
+      const previewPlane = document.getElementById("preview-plane");
+      const placedDisc   = document.getElementById("placed-disc");
+      const placedPlane  = document.getElementById("placed-plane");
+      const instr        = document.getElementById("instructions");
+      const label        = document.getElementById("pizza-label");
+
+      let placed       = false;
+      let showingImage = false; // false = show test disc, true = show pizza image
+
+      // ── Tap to freeze pizza in place ──────────────────────
       //
-      // deviceBeta = phone tilt forward/back (0=face up, 90=upright, 180=face down)
-      // When you hold phone and tilt toward floor: beta goes above 90
-
-      let deviceBeta  = 45;
-      let deviceAlpha = 0;
-
-      window.addEventListener("deviceorientation", function(e) {
-        if (e.beta  !== null) deviceBeta  = e.beta;
-        if (e.alpha !== null) deviceAlpha = e.alpha;
-      }, true);
-
-      // iOS 13+ requires explicit permission for device sensors
-      function requestSensorPermission() {
-        if (typeof DeviceOrientationEvent !== "undefined" &&
-            typeof DeviceOrientationEvent.requestPermission === "function") {
-          DeviceOrientationEvent.requestPermission()
-            .then(state => {
-              log(state === "granted" ? "✅ Sensors on" : "⚠️ Sensor denied");
-            })
-            .catch(() => {});
-        }
-      }
-
-      // ── Floor hit geometry ────────────────────────────────
-      //
-      //   📱 ← phone held at ~1.5m height, tilted at angle beta
-      //    \
-      //     \  ← ray at angle (beta - 90) below horizontal
-      //      \
-      //       X ← floor hit point
-      //
-      // Distance in front = CAM_HEIGHT / tan(degrees_below_horizontal)
-      // degrees_below_horizontal = beta - 90  (when beta > 90)
-
-      const CAM_HEIGHT = 1.5; // metres — average eye height
-
-      function getFloorHitDistance() {
-        // When phone points toward floor, beta > 90
-        // tiltBelow = how many degrees below horizontal the phone is pointing
-        const tiltBelow = deviceBeta - 90;
-
-        log("📐 Beta=" + deviceBeta.toFixed(1) +
-            "° | Below horiz=" + tiltBelow.toFixed(1) + "°");
-
-        if (tiltBelow < 5) {
-          log("⚠️ Not pointing down enough (need beta > 95°)");
-          log("👇 Tilt phone MORE toward the floor");
-          return 1.2; // fallback distance
-        }
-
-        const tiltRad = tiltBelow * Math.PI / 180;
-        const dist    = CAM_HEIGHT / Math.tan(tiltRad);
-
-        // Clamp to sensible range: 0.3m (very close) to 4m (far)
-        return Math.min(Math.max(dist, 0.3), 4.0);
-      }
-
-      // ── Forward direction from compass heading ────────────
-      function getForwardXZ() {
-        const heading = deviceAlpha * Math.PI / 180;
-        return {
-          x: -Math.sin(heading),
-          z: -Math.cos(heading)
-        };
-      }
-
-      // ── Tap to place ──────────────────────────────────────
-      const disc  = document.getElementById("test-disc");
-      const plane = document.getElementById("pizza-plane");
-      const instr = document.getElementById("instructions");
-      let placed  = false;
+      // HOW THIS WORKS:
+      // 1. Before tap: red disc/pizza follows the camera (child of camera)
+      // 2. On tap: read the world position of the preview using Three.js
+      // 3. Copy that world position onto the placed object (not child of camera)
+      // 4. Hide the preview, show the placed version — now frozen on table
 
       function handleTap(e) {
         if (e.target.closest("button")) return;
 
-        // Must be inside user gesture for iOS sensor permission
-        requestSensorPermission();
+        // Get the REAL world position of the preview disc
+        // getWorldPosition() gives us where it actually is in 3D space
+        const worldPos = new THREE.Vector3();
+        previewDisc.object3D.getWorldPosition(worldPos);
 
-        const dist    = getFloorHitDistance();
-        const forward = getForwardXZ();
+        log("📍 Freezing at world pos: " +
+            worldPos.x.toFixed(2) + ", " +
+            worldPos.y.toFixed(2) + ", " +
+            worldPos.z.toFixed(2));
 
-        const pos = {
-          x: forward.x * dist,
-          y: 0.01,               // just above floor so it doesn't clip
-          z: forward.z * dist
-        };
+        // Copy world position to the placed objects
+        placedDisc.setAttribute("position",  worldPos);
+        placedPlane.setAttribute("position", worldPos);
 
-        disc.setAttribute("position",  pos);
-        disc.setAttribute("visible",   "true");
-        plane.setAttribute("position", pos);
+        // Show placed version, hide preview
+        placedDisc.setAttribute("visible",   !showingImage);
+        placedPlane.setAttribute("visible",  showingImage);
 
-        log("🔴 Disc at x=" + pos.x.toFixed(2) +
-            " z=" + pos.z.toFixed(2) +
-            " dist=" + dist.toFixed(2) + "m");
+        // Hide the camera-attached preview
+        previewDisc.setAttribute("visible",  false);
+        previewPlane.setAttribute("visible", false);
 
-        if (!placed) {
-          placed = true;
-          instr.textContent = "🔴 Can you see a red circle on the floor?";
-        }
+        placed = true;
+        instr.textContent = "🔴 Can you see the red circle on the table?";
+        log("✅ Placed! Can you see the red disc?");
       }
 
       document.addEventListener("touchend", handleTap, { passive: true });
@@ -257,10 +237,31 @@
 
       function switchPizza() {
         pizzaIndex = (pizzaIndex + 1) % pizzas.length;
-        plane.setAttribute("src", pizzas[pizzaIndex].id);
-        document.getElementById("pizza-label").textContent = pizzas[pizzaIndex].name;
-        log("🍕 → " + pizzas[pizzaIndex].name);
+        const p = pizzas[pizzaIndex];
+
+        // Update both preview and placed
+        previewPlane.setAttribute("src", p.id);
+        placedPlane.setAttribute("src",  p.id);
+        label.textContent = p.name;
+        log("🍕 → " + p.name);
       }
+
+      // ── Toggle test disc / pizza image (tap label to switch) ─
+      document.getElementById("pizza-label").addEventListener("click", () => {
+        showingImage = !showingImage;
+
+        if (!placed) {
+          // Toggle preview mode
+          previewDisc.setAttribute("visible",  !showingImage);
+          previewPlane.setAttribute("visible", showingImage);
+        } else {
+          // Toggle placed mode
+          placedDisc.setAttribute("visible",   !showingImage);
+          placedPlane.setAttribute("visible",  showingImage);
+        }
+
+        log(showingImage ? "🍕 Showing pizza image" : "🔴 Showing test disc");
+      });
 
       // ── Pinch to resize ───────────────────────────────────
       let lastPinch = null;
@@ -271,14 +272,18 @@
           const dist = Math.sqrt(dx*dx + dy*dy);
           if (lastPinch) {
             const ratio = dist / lastPinch;
-            const cur   = disc.getAttribute("scale") || {x:1,y:1,z:1};
-            const s     = Math.min(Math.max(cur.x * ratio, 0.1), 8);
-            disc.setAttribute("scale",  {x:s, y:s, z:s});
-            plane.setAttribute("scale", {x:s, y:s, z:s});
+            const target = placed ? placedDisc : previewDisc;
+            const cur    = target.getAttribute("scale") || {x:1,y:1,z:1};
+            const s      = Math.min(Math.max(cur.x * ratio, 0.1), 8);
+            placedDisc.setAttribute("scale",   {x:s, y:s, z:s});
+            placedPlane.setAttribute("scale",  {x:s, y:s, z:s});
+            previewDisc.setAttribute("scale",  {x:s, y:s, z:s});
+            previewPlane.setAttribute("scale", {x:s, y:s, z:s});
           }
           lastPinch = dist;
         }
       }, { passive: true });
+
       document.addEventListener("touchend", e => {
         if (e.touches.length < 2) lastPinch = null;
       }, { passive: true });
