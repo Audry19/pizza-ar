@@ -11,37 +11,50 @@
     <style>
       body { margin: 0; overflow: hidden; font-family: sans-serif; }
 
-      #ui {
+      #pizza-label {
         position: fixed;
-        bottom: 40px;
+        top: 24px;
         left: 50%;
         transform: translateX(-50%);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
+        background: rgba(0,0,0,0.75);
+        color: white;
+        padding: 10px 28px;
+        border-radius: 30px;
+        font-size: 18px;
+        font-weight: bold;
         z-index: 999;
+        white-space: nowrap;
       }
 
       #instructions {
+        position: fixed;
+        bottom: 110px;
+        left: 50%;
+        transform: translateX(-50%);
         background: rgba(0,0,0,0.7);
         color: white;
         padding: 10px 24px;
         border-radius: 30px;
-        font-size: 15px;
-        text-align: center;
+        font-size: 14px;
+        z-index: 999;
         pointer-events: none;
+        text-align: center;
       }
 
-      button {
+      #switch-btn {
+        position: fixed;
+        bottom: 40px;
+        left: 50%;
+        transform: translateX(-50%);
         background: #e63946;
         color: white;
         border: none;
-        padding: 14px 36px;
+        padding: 16px 40px;
         border-radius: 30px;
         font-size: 16px;
         font-weight: bold;
         cursor: pointer;
+        z-index: 999;
       }
 
       #debug {
@@ -49,11 +62,11 @@
         top: 16px;
         left: 12px;
         right: 12px;
-        background: rgba(0,0,0,0.8);
+        background: rgba(0,0,0,0.82);
         color: #00ff88;
         padding: 10px 14px;
         border-radius: 12px;
-        font-size: 12px;
+        font-size: 11px;
         z-index: 999;
         pointer-events: none;
         line-height: 1.8;
@@ -62,12 +75,10 @@
   </head>
 
   <body>
-    <div id="debug">🔄 Starting...</div>
-
-    <div id="ui">
-      <div id="instructions">👆 Tap table to place pizza</div>
-      <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
-    </div>
+    <div id="pizza-label">BBQ Chicken Pizza</div>
+    <div id="debug">🔄 Loading...</div>
+    <div id="instructions">👆 Point at floor/table then tap</div>
+    <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
 
     <a-scene
       embedded
@@ -75,37 +86,27 @@
       renderer="logarithmicDepthBuffer: true;"
       vr-mode-ui="enabled: false"
     >
-
       <a-assets timeout="20000">
         <img id="img-bbq"        src="images/bbq-chicken.png"  crossorigin="anonymous" />
         <img id="img-pepperoni"  src="images/pepperoni.png"    crossorigin="anonymous" />
         <img id="img-margherita" src="images/margherita.png"   crossorigin="anonymous" />
       </a-assets>
 
-      <!--
-        THIS IS THE TEST SHAPE — bright red circle, no image needed
-        If you can see a red circle on the table → placement works perfectly
-        We will swap this for the pizza image in Step 2
-      -->
+      <!-- Red test disc — flat cylinder, no image needed -->
       <a-cylinder
         id="test-disc"
         color="#FF0000"
-        radius="0.2"
+        radius="0.25"
         height="0.01"
-        position="0 0 0"
         visible="false"
       ></a-cylinder>
 
-      <!--
-        The real pizza plane — hidden for now
-        We show this in Step 2 once we confirm placement works
-      -->
+      <!-- Pizza image plane — shown after test works -->
       <a-plane
         id="pizza-plane"
-        width="0.4"
-        height="0.4"
+        width="0.5"
+        height="0.5"
         rotation="-90 0 0"
-        position="0 0 0"
         visible="false"
         material="transparent: true; alphaTest: 0.1; side: double; shader: flat;"
       ></a-plane>
@@ -114,42 +115,34 @@
     </a-scene>
 
     <script>
-      const log = (msg) => {
-        const d = document.getElementById("debug");
-        d.innerHTML += "<br>" + msg;
-      };
+      // ── Logging helper ──────────────────────────────────
+      const debugEl = document.getElementById("debug");
+      function log(msg) {
+        debugEl.innerHTML += "<br>" + msg;
+      }
+      function setLog(msg) {
+        debugEl.innerHTML = msg;
+      }
 
-      // Track image loading
-      let imagesLoaded = 0;
-      let imagesFailed = [];
-
+      // ── Track image loading ─────────────────────────────
+      let loaded = 0;
       document.querySelectorAll("a-assets img").forEach(img => {
         const name = img.src.split("/").pop();
-        img.addEventListener("load",  () => {
-          imagesLoaded++;
-          log("✅ Loaded: " + name);
-        });
-        img.addEventListener("error", () => {
-          imagesFailed.push(name);
-          log("❌ MISSING: " + name);
-        });
+        img.addEventListener("load",  () => { loaded++; log("✅ " + name); });
+        img.addEventListener("error", () => log("❌ MISSING: " + name));
       });
 
       const scene = document.querySelector("a-scene");
       scene.addEventListener("loaded", () => {
-        document.getElementById("debug").innerHTML =
-          "✅ Scene ready — images loaded: " + imagesLoaded +
-          (imagesFailed.length ? "<br>❌ Failed: " + imagesFailed.join(", ") : "") +
-          "<br>👆 Tap table to place red test circle";
+        setLog("✅ Scene ready | images: " + loaded + "/3<br>👇 Point camera at floor then tap");
       });
 
-      const disc  = document.getElementById("test-disc");
-      const plane = document.getElementById("pizza-plane");
-      const instr = document.getElementById("instructions");
-      let placed  = false;
-
-      function getPositionInFrontOfCamera() {
-        const cam = document.getElementById("main-camera");
+      // ── KEY FIX: Floor intersection math ───────────────
+      // The problem before: disc was placed at Y=1.2 (floating in air)
+      // This function shoots a ray from the camera downward and finds
+      // exactly where it hits the floor (Y=0), so the disc lands ON the surface
+      function getFloorHitPosition() {
+        const cam    = document.getElementById("main-camera");
         const camObj = cam.object3D;
 
         const pos = new THREE.Vector3();
@@ -157,39 +150,94 @@
         camObj.getWorldPosition(pos);
         camObj.getWorldDirection(dir);
 
-        // Place 0.8m in front, 0.4m below eye level (table surface)
+        // Camera height and direction from debug:
+        // pos.y was ~1.6 (eye level), dir.y was near 0 (pointing forward not down)
+        // We need to find where the ray hits the floor plane (y = 0)
+        //
+        // Math: ray hits floor when pos.y + t * dir.y = 0
+        // So t = -pos.y / dir.y
+        // Then floor hit = pos + t * dir
+
+        const floorY = 0.01; // just above floor so it doesn't clip
+
+        // Log what we're working with
+        log("📐 Cam pos Y=" + pos.y.toFixed(2) +
+            " | Dir Y=" + dir.y.toFixed(2));
+
+        // If camera is pointing down enough (dir.y is negative)
+        if (dir.y < -0.05) {
+          const t = (floorY - pos.y) / dir.y;
+
+          if (t > 0 && t < 8) {
+            // Valid floor hit within 8 metres
+            return {
+              x: pos.x + dir.x * t,
+              y: floorY,
+              z: pos.z + dir.z * t,
+              method: "floor-hit (t=" + t.toFixed(2) + "m)"
+            };
+          }
+        }
+
+        // Fallback: camera not pointing down enough
+        // Place 1.2m in front at floor level
+        log("⚠️ Camera not pointing down enough (dir.y=" + dir.y.toFixed(2) + ")");
+        log("👇 Try tilting phone MORE downward toward the floor");
         return {
-          x: pos.x + dir.x * 0.8,
-          y: pos.y - 0.4,
-          z: pos.z + dir.z * 0.8
+          x: pos.x + dir.x * 1.2,
+          y: floorY,
+          z: pos.z + dir.z * 1.2,
+          method: "fallback-forward"
         };
       }
+
+      // ── Tap to place ────────────────────────────────────
+      const disc    = document.getElementById("test-disc");
+      const plane   = document.getElementById("pizza-plane");
+      const instr   = document.getElementById("instructions");
+      let placed    = false;
 
       function handleTap(e) {
         if (e.target.closest("button")) return;
 
-        const p = getPositionInFrontOfCamera();
+        const hit = getFloorHitPosition();
 
-        // Show the red test disc
-        disc.setAttribute("position", p);
-        disc.setAttribute("visible", "true");
+        disc.setAttribute("position",  hit);
+        disc.setAttribute("visible",   "true");
+        plane.setAttribute("position", hit);
 
-        log("🔴 Test disc placed at: " +
-          p.x.toFixed(2) + ", " +
-          p.y.toFixed(2) + ", " +
-          p.z.toFixed(2)
+        log("🔴 Disc at: " +
+          hit.x.toFixed(2) + ", " +
+          hit.y.toFixed(2) + ", " +
+          hit.z.toFixed(2) +
+          " [" + hit.method + "]"
         );
 
         if (!placed) {
           placed = true;
-          instr.textContent = "🔴 Can you see a red circle?";
+          instr.textContent = "Can you see a red circle on the floor? 🔴";
         }
       }
 
       document.addEventListener("touchend", handleTap, { passive: true });
       document.addEventListener("click",    handleTap);
 
-      // Pinch to resize
+      // ── Switch pizza ────────────────────────────────────
+      const pizzas = [
+        { name: "BBQ Chicken Pizza",  id: "#img-bbq"        },
+        { name: "Pepperoni Pizza",    id: "#img-pepperoni"  },
+        { name: "Margherita Pizza",   id: "#img-margherita" }
+      ];
+      let pizzaIndex = 0;
+
+      function switchPizza() {
+        pizzaIndex = (pizzaIndex + 1) % pizzas.length;
+        plane.setAttribute("src", pizzas[pizzaIndex].id);
+        document.getElementById("pizza-label").textContent = pizzas[pizzaIndex].name;
+        log("🍕 → " + pizzas[pizzaIndex].name);
+      }
+
+      // ── Pinch to resize ─────────────────────────────────
       let lastPinch = null;
       document.addEventListener("touchmove", e => {
         if (e.touches.length === 2) {
@@ -199,30 +247,16 @@
           if (lastPinch) {
             const ratio = dist / lastPinch;
             const cur   = disc.getAttribute("scale") || {x:1,y:1,z:1};
-            const s     = Math.min(Math.max(cur.x * ratio, 0.1), 6);
-            disc.setAttribute("scale", {x:s, y:s, z:s});
+            const s     = Math.min(Math.max(cur.x * ratio, 0.1), 8);
+            disc.setAttribute("scale",  {x:s, y:s, z:s});
             plane.setAttribute("scale", {x:s, y:s, z:s});
           }
           lastPinch = dist;
         }
       }, { passive: true });
-
       document.addEventListener("touchend", e => {
         if (e.touches.length < 2) lastPinch = null;
       }, { passive: true });
-
-      // Pizza switcher (not active yet — Step 2)
-      const pizzas = [
-        { name: "BBQ Chicken",  id: "#img-bbq"        },
-        { name: "Pepperoni",    id: "#img-pepperoni"  },
-        { name: "Margherita",   id: "#img-margherita" }
-      ];
-      let pizzaIndex = 0;
-
-      function switchPizza() {
-        pizzaIndex = (pizzaIndex + 1) % pizzas.length;
-        log("🍕 Switched to " + pizzas[pizzaIndex].name);
-      }
     </script>
   </body>
 </html>
