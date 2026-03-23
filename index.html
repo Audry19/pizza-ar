@@ -39,6 +39,7 @@
         z-index: 999;
         pointer-events: none;
         text-align: center;
+        width: 80%;
       }
 
       #switch-btn {
@@ -60,16 +61,18 @@
       #debug {
         position: fixed;
         top: 16px;
-        left: 12px;
-        right: 12px;
-        background: rgba(0,0,0,0.82);
+        left: 8px;
+        right: 8px;
+        background: rgba(0,0,0,0.85);
         color: #00ff88;
         padding: 10px 14px;
         border-radius: 12px;
         font-size: 11px;
         z-index: 999;
         pointer-events: none;
-        line-height: 1.8;
+        line-height: 1.9;
+        max-height: 40vh;
+        overflow: hidden;
       }
     </style>
   </head>
@@ -77,7 +80,7 @@
   <body>
     <div id="pizza-label">BBQ Chicken Pizza</div>
     <div id="debug">🔄 Loading...</div>
-    <div id="instructions">👆 Point at floor/table then tap</div>
+    <div id="instructions">👇 Point phone at floor then tap</div>
     <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
 
     <a-scene
@@ -92,12 +95,12 @@
         <img id="img-margherita" src="images/margherita.png"   crossorigin="anonymous" />
       </a-assets>
 
-      <!-- Red test disc — flat cylinder, no image needed -->
+      <!-- Flat red disc for testing placement -->
       <a-cylinder
         id="test-disc"
         color="#FF0000"
-        radius="0.25"
-        height="0.01"
+        radius="0.3"
+        height="0.02"
         visible="false"
       ></a-cylinder>
 
@@ -115,114 +118,136 @@
     </a-scene>
 
     <script>
-      // ── Logging helper ──────────────────────────────────
-      const debugEl = document.getElementById("debug");
-      function log(msg) {
-        debugEl.innerHTML += "<br>" + msg;
-      }
-      function setLog(msg) {
-        debugEl.innerHTML = msg;
-      }
 
-      // ── Track image loading ─────────────────────────────
-      let loaded = 0;
+      // ── Debug helper ──────────────────────────────────────
+      const debugEl = document.getElementById("debug");
+      function setLog(msg) { debugEl.innerHTML = msg; }
+      function log(msg)    { debugEl.innerHTML += "<br>" + msg; }
+
+      // ── Image loading ─────────────────────────────────────
+      let loadedCount = 0;
       document.querySelectorAll("a-assets img").forEach(img => {
         const name = img.src.split("/").pop();
-        img.addEventListener("load",  () => { loaded++; log("✅ " + name); });
+        img.addEventListener("load",  () => { loadedCount++; log("✅ " + name); });
         img.addEventListener("error", () => log("❌ MISSING: " + name));
       });
 
-      const scene = document.querySelector("a-scene");
-      scene.addEventListener("loaded", () => {
-        setLog("✅ Scene ready | images: " + loaded + "/3<br>👇 Point camera at floor then tap");
+      document.querySelector("a-scene").addEventListener("loaded", () => {
+        setLog("✅ Scene ready | " + loadedCount + "/3 images loaded");
+        log("👇 Point phone at floor then tap");
       });
 
-      // ── KEY FIX: Floor intersection math ───────────────
-      // The problem before: disc was placed at Y=1.2 (floating in air)
-      // This function shoots a ray from the camera downward and finds
-      // exactly where it hits the floor (Y=0), so the disc lands ON the surface
-      function getFloorHitPosition() {
-        const cam    = document.getElementById("main-camera");
-        const camObj = cam.object3D;
+      // ── KEY FIX: Read REAL device tilt from phone sensors ─
+      // AR.js controls the camera internally and never shares
+      // its rotation with Three.js getWorldDirection() — that
+      // is why we kept getting Dir Y=0.00 in previous versions.
+      // Solution: read the phone's physical gyroscope directly.
+      //
+      // deviceBeta = phone tilt forward/back (0=face up, 90=upright, 180=face down)
+      // When you hold phone and tilt toward floor: beta goes above 90
 
-        const pos = new THREE.Vector3();
-        const dir = new THREE.Vector3();
-        camObj.getWorldPosition(pos);
-        camObj.getWorldDirection(dir);
+      let deviceBeta  = 45;
+      let deviceAlpha = 0;
 
-        // Camera height and direction from debug:
-        // pos.y was ~1.6 (eye level), dir.y was near 0 (pointing forward not down)
-        // We need to find where the ray hits the floor plane (y = 0)
-        //
-        // Math: ray hits floor when pos.y + t * dir.y = 0
-        // So t = -pos.y / dir.y
-        // Then floor hit = pos + t * dir
+      window.addEventListener("deviceorientation", function(e) {
+        if (e.beta  !== null) deviceBeta  = e.beta;
+        if (e.alpha !== null) deviceAlpha = e.alpha;
+      }, true);
 
-        const floorY = 0.01; // just above floor so it doesn't clip
+      // iOS 13+ requires explicit permission for device sensors
+      function requestSensorPermission() {
+        if (typeof DeviceOrientationEvent !== "undefined" &&
+            typeof DeviceOrientationEvent.requestPermission === "function") {
+          DeviceOrientationEvent.requestPermission()
+            .then(state => {
+              log(state === "granted" ? "✅ Sensors on" : "⚠️ Sensor denied");
+            })
+            .catch(() => {});
+        }
+      }
 
-        // Log what we're working with
-        log("📐 Cam pos Y=" + pos.y.toFixed(2) +
-            " | Dir Y=" + dir.y.toFixed(2));
+      // ── Floor hit geometry ────────────────────────────────
+      //
+      //   📱 ← phone held at ~1.5m height, tilted at angle beta
+      //    \
+      //     \  ← ray at angle (beta - 90) below horizontal
+      //      \
+      //       X ← floor hit point
+      //
+      // Distance in front = CAM_HEIGHT / tan(degrees_below_horizontal)
+      // degrees_below_horizontal = beta - 90  (when beta > 90)
 
-        // If camera is pointing down enough (dir.y is negative)
-        if (dir.y < -0.05) {
-          const t = (floorY - pos.y) / dir.y;
+      const CAM_HEIGHT = 1.5; // metres — average eye height
 
-          if (t > 0 && t < 8) {
-            // Valid floor hit within 8 metres
-            return {
-              x: pos.x + dir.x * t,
-              y: floorY,
-              z: pos.z + dir.z * t,
-              method: "floor-hit (t=" + t.toFixed(2) + "m)"
-            };
-          }
+      function getFloorHitDistance() {
+        // When phone points toward floor, beta > 90
+        // tiltBelow = how many degrees below horizontal the phone is pointing
+        const tiltBelow = deviceBeta - 90;
+
+        log("📐 Beta=" + deviceBeta.toFixed(1) +
+            "° | Below horiz=" + tiltBelow.toFixed(1) + "°");
+
+        if (tiltBelow < 5) {
+          log("⚠️ Not pointing down enough (need beta > 95°)");
+          log("👇 Tilt phone MORE toward the floor");
+          return 1.2; // fallback distance
         }
 
-        // Fallback: camera not pointing down enough
-        // Place 1.2m in front at floor level
-        log("⚠️ Camera not pointing down enough (dir.y=" + dir.y.toFixed(2) + ")");
-        log("👇 Try tilting phone MORE downward toward the floor");
+        const tiltRad = tiltBelow * Math.PI / 180;
+        const dist    = CAM_HEIGHT / Math.tan(tiltRad);
+
+        // Clamp to sensible range: 0.3m (very close) to 4m (far)
+        return Math.min(Math.max(dist, 0.3), 4.0);
+      }
+
+      // ── Forward direction from compass heading ────────────
+      function getForwardXZ() {
+        const heading = deviceAlpha * Math.PI / 180;
         return {
-          x: pos.x + dir.x * 1.2,
-          y: floorY,
-          z: pos.z + dir.z * 1.2,
-          method: "fallback-forward"
+          x: -Math.sin(heading),
+          z: -Math.cos(heading)
         };
       }
 
-      // ── Tap to place ────────────────────────────────────
-      const disc    = document.getElementById("test-disc");
-      const plane   = document.getElementById("pizza-plane");
-      const instr   = document.getElementById("instructions");
-      let placed    = false;
+      // ── Tap to place ──────────────────────────────────────
+      const disc  = document.getElementById("test-disc");
+      const plane = document.getElementById("pizza-plane");
+      const instr = document.getElementById("instructions");
+      let placed  = false;
 
       function handleTap(e) {
         if (e.target.closest("button")) return;
 
-        const hit = getFloorHitPosition();
+        // Must be inside user gesture for iOS sensor permission
+        requestSensorPermission();
 
-        disc.setAttribute("position",  hit);
+        const dist    = getFloorHitDistance();
+        const forward = getForwardXZ();
+
+        const pos = {
+          x: forward.x * dist,
+          y: 0.01,               // just above floor so it doesn't clip
+          z: forward.z * dist
+        };
+
+        disc.setAttribute("position",  pos);
         disc.setAttribute("visible",   "true");
-        plane.setAttribute("position", hit);
+        plane.setAttribute("position", pos);
 
-        log("🔴 Disc at: " +
-          hit.x.toFixed(2) + ", " +
-          hit.y.toFixed(2) + ", " +
-          hit.z.toFixed(2) +
-          " [" + hit.method + "]"
-        );
+        log("🔴 Disc at x=" + pos.x.toFixed(2) +
+            " z=" + pos.z.toFixed(2) +
+            " dist=" + dist.toFixed(2) + "m");
 
         if (!placed) {
           placed = true;
-          instr.textContent = "Can you see a red circle on the floor? 🔴";
+          instr.textContent = "🔴 Can you see a red circle on the floor?";
         }
       }
 
       document.addEventListener("touchend", handleTap, { passive: true });
       document.addEventListener("click",    handleTap);
 
-      // ── Switch pizza ────────────────────────────────────
+      // ── Switch pizza ──────────────────────────────────────
       const pizzas = [
         { name: "BBQ Chicken Pizza",  id: "#img-bbq"        },
         { name: "Pepperoni Pizza",    id: "#img-pepperoni"  },
@@ -237,7 +262,7 @@
         log("🍕 → " + pizzas[pizzaIndex].name);
       }
 
-      // ── Pinch to resize ─────────────────────────────────
+      // ── Pinch to resize ───────────────────────────────────
       let lastPinch = null;
       document.addEventListener("touchmove", e => {
         if (e.touches.length === 2) {
@@ -257,6 +282,7 @@
       document.addEventListener("touchend", e => {
         if (e.touches.length < 2) lastPinch = null;
       }, { passive: true });
+
     </script>
   </body>
 </html>
