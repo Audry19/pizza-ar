@@ -4,213 +4,232 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <title>Pizza AR Menu</title>
-
-  <!-- Three.js — handles 3D rendering + WebXR surface tracking -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; overflow: hidden; font-family: Arial, sans-serif; }
+
+    body {
+      background: #000;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      touch-action: none;
+    }
+
+    /* ── CAMERA fills screen ── */
+    #camera {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      z-index: 1;
+      display: none;
+    }
 
     /* ── START SCREEN ── */
     #start-screen {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.93);
+      background: #111;
       z-index: 100;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 14px;
-      padding: 30px;
+      gap: 16px;
+      padding: 36px;
       text-align: center;
       color: white;
     }
-    #start-screen .emoji { font-size: 60px; }
-    #start-screen h1 { font-size: 24px; font-weight: bold; }
-    #start-screen p  { font-size: 13px; opacity: 0.75; line-height: 1.7; }
-
-    .red-btn {
+    #start-screen .emoji { font-size: 72px; line-height: 1; }
+    #start-screen h1 { font-size: 26px; font-weight: bold; }
+    #start-screen p {
+      font-size: 14px;
+      opacity: 0.7;
+      line-height: 1.8;
+      max-width: 300px;
+    }
+    #start-btn {
       background: #e63946;
       color: white;
       border: none;
-      padding: 16px 44px;
-      border-radius: 40px;
-      font-size: 17px;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 8px;
-    }
-
-    /* ── NO-WEBXR FALLBACK (shown if device doesn't support it) ── */
-    #no-webxr {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.93);
-      z-index: 100;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      padding: 30px;
-      text-align: center;
-      color: white;
-    }
-    #no-webxr p { font-size: 13px; opacity: 0.75; line-height: 1.8; }
-    #no-webxr .big { font-size: 40px; }
-
-    /* ── AR OVERLAY UI (sits on top of the AR camera) ── */
-    #overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      pointer-events: none;
-      display: none;
-    }
-
-    /* Pizza name label */
-    #pizza-label {
-      position: absolute;
-      top: 28px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.75);
-      color: white;
-      padding: 10px 26px;
+      padding: 18px 52px;
       border-radius: 40px;
       font-size: 18px;
       font-weight: bold;
-      white-space: nowrap;
+      cursor: pointer;
+      margin-top: 6px;
     }
 
-    /* Ingredients */
-    #ingredients {
-      position: absolute;
-      top: 80px;
+    /* ── PIZZA NAME ── */
+    #pizza-label {
+      position: fixed;
+      top: 26px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0,0,0,0.55);
+      background: rgba(0,0,0,0.78);
+      color: white;
+      padding: 10px 28px;
+      border-radius: 40px;
+      font-size: 19px;
+      font-weight: bold;
+      z-index: 50;
+      white-space: nowrap;
+      display: none;
+    }
+
+    /* ── INGREDIENTS ── */
+    #ingredients {
+      position: fixed;
+      top: 78px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.58);
       color: #ffd166;
-      padding: 5px 16px;
+      padding: 6px 18px;
       border-radius: 20px;
       font-size: 12px;
+      z-index: 50;
       white-space: nowrap;
+      display: none;
     }
 
-    /* Instruction */
+    /* ── INSTRUCTION ── */
     #instructions {
-      position: absolute;
-      bottom: 130px;
+      position: fixed;
+      bottom: 128px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0,0,0,0.65);
+      background: rgba(0,0,0,0.68);
       color: white;
-      padding: 10px 22px;
+      padding: 12px 24px;
       border-radius: 30px;
       font-size: 14px;
+      z-index: 50;
+      pointer-events: none;
       text-align: center;
-      width: 85%;
+      width: 84%;
       line-height: 1.5;
+      display: none;
     }
 
-    /* Switch button — needs pointer events */
+    /* ── SWITCH BUTTON ── */
     #switch-btn {
-      position: absolute;
-      bottom: 50px;
+      position: fixed;
+      bottom: 48px;
       left: 50%;
       transform: translateX(-50%);
       background: #e63946;
       color: white;
       border: none;
-      padding: 16px 44px;
+      padding: 16px 46px;
       border-radius: 40px;
       font-size: 16px;
       font-weight: bold;
       cursor: pointer;
-      pointer-events: all;  /* buttons need to be tappable */
+      z-index: 50;
+      display: none;
     }
+
+    /* ── SURFACE HINT ring ── */
+    #surface-ring {
+      position: fixed;
+      width: 120px;
+      height: 36px;
+      border: 3px solid rgba(255,255,255,0.85);
+      border-radius: 50%;
+      left: 50%;
+      top: 55%;
+      transform: translate(-50%, -50%);
+      z-index: 30;
+      pointer-events: none;
+      display: none;
+      box-shadow: 0 0 16px rgba(255,255,255,0.3);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+      50%       { opacity: 0.5; transform: translate(-50%,-50%) scale(1.08); }
+    }
+
+    /* ── PIZZA WRAPPER ── */
+    /*
+      The trick to making pizza look flat on a table:
+      - CSS perspective on the parent creates the 3D space
+      - rotateX on the image tilts it to lie flat
+      - The gyroscope shifts the wrapper position so it
+        stays locked to the surface as the phone moves
+    */
+    #pizza-wrap {
+      position: fixed;
+      z-index: 20;
+      display: none;
+      /* perspective creates the 3D depth effect */
+      perspective: 800px;
+      perspective-origin: 50% 0%;
+      transform: translate(-50%, -50%);
+      /* smooth movement when gyroscope adjusts position */
+      transition: left 0.08s linear, top 0.08s linear;
+    }
+
+    #pizza-img {
+      /*
+        width > height on purpose:
+        rotateX compresses vertical dimension, making a circle look oval.
+        Making height = width * 1.4 compensates for the compression
+        so the pizza looks round, not squeezed.
+      */
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: block;
+      transform: rotateX(52deg);
+      transform-origin: center center;
+      filter: drop-shadow(0 16px 28px rgba(0,0,0,0.65));
+      transition: opacity 0.3s ease;
+    }
+
   </style>
 </head>
 <body>
 
-  <!-- START SCREEN -->
+  <!-- ── START SCREEN ── -->
   <div id="start-screen">
     <div class="emoji">🍕</div>
     <h1>Pizza AR Menu</h1>
     <p>
-      This uses your phone's camera to detect<br>
-      the table surface and place the pizza on it.<br><br>
-      <b>Android:</b> Works perfectly in Chrome<br>
-      <b>iPhone:</b> Requires iOS 17+ in Safari
+      Point your camera at the table<br>
+      and tap to place the pizza.<br><br>
+      The pizza will <b>stay on the table</b><br>
+      as you move your phone around.
     </p>
-    <button class="red-btn" onclick="startAR()">Start AR Experience</button>
+    <button id="start-btn" onclick="startApp()">Open Camera</button>
   </div>
 
-  <!-- SHOWN IF WEBXR NOT SUPPORTED -->
-  <div id="no-webxr">
-    <div class="big">📱</div>
-    <b style="font-size:18px; color:white;">AR Not Available</b>
-    <p>
-      Your browser does not support WebXR AR.<br><br>
-      <b>Android users:</b> Open in <b>Chrome</b> browser<br><br>
-      <b>iPhone users:</b> Make sure you have<br>
-      iOS 17 or later, then open in <b>Safari</b><br><br>
-      If you're on iOS 16 or below, tap below<br>
-      to use the basic version instead.
-    </p>
-    <button class="red-btn" onclick="startFallback()">Use Basic Version</button>
-  </div>
+  <!-- ── CAMERA ── -->
+  <video id="camera" autoplay playsinline muted></video>
 
-  <!-- AR OVERLAY — UI shown during AR session -->
-  <div id="overlay">
-    <div id="pizza-label">BBQ Chicken Pizza</div>
-    <div id="ingredients">BBQ sauce · Chicken · Olives · Bell peppers · Mozzarella</div>
-    <div id="instructions">🔍 Move phone slowly over the table to detect surface</div>
-    <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
-  </div>
+  <!-- ── SURFACE RING (pulsing circle on table) ── -->
+  <div id="surface-ring"></div>
 
-  <!-- FALLBACK: simple camera overlay for older phones -->
-  <video id="fallback-camera" autoplay playsinline muted
-    style="display:none; position:fixed; inset:0; width:100%; height:100%; object-fit:cover; z-index:1;"></video>
-  <div id="fallback-pizza"
-    style="display:none; position:fixed; z-index:5; transform:translate(-50%,-50%); pointer-events:none;">
-    <img id="fallback-img" src="images/bbq-chicken.png"
-      style="width:240px; height:240px; border-radius:50%; object-fit:cover;
-             transform:rotateX(65deg); filter:drop-shadow(0 20px 30px rgba(0,0,0,0.6));"
-    />
-  </div>
-  <div id="fallback-ui" style="display:none; position:fixed; inset:0; z-index:6; pointer-events:none;">
-    <div id="pizza-label-fb"
-      style="position:absolute; top:28px; left:50%; transform:translateX(-50%);
-             background:rgba(0,0,0,0.75); color:white; padding:10px 26px;
-             border-radius:40px; font-size:18px; font-weight:bold; white-space:nowrap;">
-      BBQ Chicken Pizza
-    </div>
-    <div id="ing-fb"
-      style="position:absolute; top:80px; left:50%; transform:translateX(-50%);
-             background:rgba(0,0,0,0.55); color:#ffd166; padding:5px 16px;
-             border-radius:20px; font-size:12px; white-space:nowrap;">
-      BBQ sauce · Chicken · Olives · Bell peppers · Mozzarella
-    </div>
-    <div style="position:absolute; bottom:130px; left:50%; transform:translateX(-50%);
-                background:rgba(0,0,0,0.65); color:white; padding:10px 22px;
-                border-radius:30px; font-size:14px; text-align:center; width:85%;">
-      Tap table to move pizza
-    </div>
-    <button onclick="switchPizzaFB()"
-      style="position:absolute; bottom:50px; left:50%; transform:translateX(-50%);
-             background:#e63946; color:white; border:none; padding:16px 44px;
-             border-radius:40px; font-size:16px; font-weight:bold; cursor:pointer;
-             pointer-events:all;">
-      Switch Pizza ↺
-    </button>
+  <!-- ── UI ── -->
+  <div id="pizza-label">BBQ Chicken Pizza</div>
+  <div id="ingredients">BBQ sauce · Chicken · Olives · Bell peppers · Mozzarella</div>
+  <div id="instructions">👆 Tap the table to place pizza here</div>
+  <button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button>
+
+  <!-- ── PIZZA ── -->
+  <div id="pizza-wrap">
+    <img id="pizza-img" src="images/bbq-chicken.png" alt="pizza" />
   </div>
 
   <script>
 
-    // ── Pizza data ────────────────────────────────────────
+    // ─────────────────────────────────────────────────────
+    // PIZZA DATA
+    // ─────────────────────────────────────────────────────
     const pizzas = [
       {
         name:        "BBQ Chicken Pizza",
@@ -228,252 +247,261 @@
         ingredients: "Tomato sauce · Fresh mozzarella · Basil · Olive oil"
       }
     ];
+
     let currentIndex = 0;
-    let pizzaMesh    = null;  // The 3D pizza object in the AR scene
-    let reticle      = null;  // The targeting ring shown on detected surface
-    let hitTestSource = null;
     let pizzaPlaced  = false;
-    let renderer, scene, camera;
 
-    // ── START AR ──────────────────────────────────────────
-    async function startAR() {
+    // DOM
+    const pizzaWrap  = document.getElementById("pizza-wrap");
+    const pizzaImg   = document.getElementById("pizza-img");
+    const labelEl    = document.getElementById("pizza-label");
+    const ingEl      = document.getElementById("ingredients");
+    const instrEl    = document.getElementById("instructions");
+    const ringEl     = document.getElementById("surface-ring");
 
-      // Check if WebXR AR is supported on this device
-      if (!navigator.xr) {
-        showNoWebXR(); return;
-      }
-      const supported = await navigator.xr.isSessionSupported("immersive-ar").catch(() => false);
-      if (!supported) {
-        showNoWebXR(); return;
-      }
+    // ─────────────────────────────────────────────────────
+    // SURFACE ANCHORING SYSTEM
+    //
+    // How this works:
+    // When the customer taps, we record:
+    //   1. Where on screen they tapped (tapX, tapY)
+    //   2. The phone's tilt angle at that moment (anchorBeta, anchorGamma)
+    //
+    // As the phone moves, we measure how much the tilt has changed.
+    // We shift the pizza position to compensate for that movement.
+    // This makes the pizza appear to stay glued to the table surface.
+    //
+    // Example: phone tilts 10° to the right after placing the pizza.
+    //   → We move the pizza 10° worth of pixels to the right too
+    //   → From the user's perspective, pizza hasn't moved from the table
+    // ─────────────────────────────────────────────────────
 
-      // Hide start screen, show overlay UI
-      document.getElementById("start-screen").style.display = "none";
-      document.getElementById("overlay").style.display = "block";
+    // Current device angles (updated 60x/second by gyroscope)
+    let currentBeta  = 90;   // forward/back tilt
+    let currentGamma = 0;    // left/right tilt
+    let currentAlpha = 0;    // compass rotation
 
-      // ── Set up Three.js renderer ──
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-      document.body.appendChild(renderer.domElement);
-      renderer.domElement.style.cssText =
-        "position:fixed; top:0; left:0; z-index:2;";
+    // Angles recorded at moment of tap
+    let anchorBeta   = 90;
+    let anchorGamma  = 0;
+    let anchorAlpha  = 0;
 
-      // ── Scene and camera ──
-      scene  = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    // Screen position where pizza was placed
+    let anchorX      = window.innerWidth  / 2;
+    let anchorY      = window.innerHeight / 2;
 
-      // ── Lighting (so pizza image shows correctly) ──
-      scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-      scene.add(new THREE.DirectionalLight(0xffffff, 0.8));
+    // How sensitive the compensation is
+    // Higher = pizza moves more with phone tilt
+    const SENSITIVITY_X = 8;   // pixels per degree (left/right)
+    const SENSITIVITY_Y = 5;   // pixels per degree (forward/back)
 
-      // ── Reticle — the ring shown on detected surface ──
-      // This is the white circle that appears on the table
-      // before the customer taps to place the pizza
-      const ringGeo = new THREE.RingGeometry(0.12, 0.15, 32);
-      // Rotate ring to lie flat
-      ringGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
-      const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-      reticle = new THREE.Mesh(ringGeo, ringMat);
-      reticle.matrixAutoUpdate = false;
-      reticle.visible = false;
-      scene.add(reticle);
-
-      // ── Pizza mesh — flat circle with pizza image ──
-      // We load the pizza image as a texture and apply it
-      // to a flat circle shape lying on the surface
-      pizzaMesh = createPizzaMesh(pizzas[0].image);
-      pizzaMesh.visible = false;
-      scene.add(pizzaMesh);
-
-      // ── Start WebXR AR session ──
+    // ─────────────────────────────────────────────────────
+    // START CAMERA
+    // ─────────────────────────────────────────────────────
+    async function startApp() {
       try {
-        const session = await navigator.xr.requestSession("immersive-ar", {
-          requiredFeatures: ["hit-test"],
-          optionalFeatures: ["dom-overlay"],
-          domOverlay: { root: document.getElementById("overlay") }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width:      { ideal: 1280 },
+            height:     { ideal: 720  }
+          },
+          audio: false
         });
 
-        renderer.xr.setSession(session);
+        const cam = document.getElementById("camera");
+        cam.srcObject = stream;
+        cam.style.display = "block";
+        await cam.play();
 
-        // Get the reference space (the coordinate system)
-        // "local" = origin at device when session started
-        session.addEventListener("end", () => {
-          document.getElementById("overlay").style.display = "none";
-        });
+        // Hide start screen
+        document.getElementById("start-screen").style.display = "none";
 
-        // Set up hit test — this is what detects the surface
-        // "viewer" space = from the phone's camera perspective
-        session.requestReferenceSpace("viewer").then(viewerSpace => {
-          session.requestHitTestSource({ space: viewerSpace }).then(source => {
-            hitTestSource = source;
-          });
-        });
+        // Show UI
+        labelEl.style.display   = "block";
+        ingEl.style.display     = "block";
+        instrEl.style.display   = "block";
+        ringEl.style.display    = "block";  // pulsing ring on table
+        document.getElementById("switch-btn").style.display = "block";
 
-        // Handle screen tap to place pizza
-        session.addEventListener("select", onTap);
+        // Request iOS sensor permission (must be after user gesture)
+        requestOrientationPermission();
 
-        // Start render loop
-        renderer.setAnimationLoop((timestamp, frame) => {
-          renderFrame(frame);
-        });
-
-      } catch(err) {
-        showNoWebXR();
+      } catch (err) {
+        document.getElementById("start-screen").innerHTML =
+          "<div style='color:white; padding:32px; text-align:center; line-height:2.2'>" +
+          "<div style='font-size:48px'>🔒</div>" +
+          "<b style='font-size:18px'>Camera Blocked</b><br><br>" +
+          "On iPhone: go to<br>" +
+          "<b>Settings → Safari → Camera</b><br>" +
+          "and set it to <b>Allow</b><br><br>" +
+          "Then reload this page." +
+          "</div>";
       }
     }
 
-    // ── Create pizza mesh with image texture ──────────────
-    function createPizzaMesh(imageSrc) {
-      // CircleGeometry = flat circle, perfect for a pizza
-      const geo = new THREE.CircleGeometry(0.18, 64); // 18cm radius
-
-      // Load the pizza image as texture
-      const texture = new THREE.TextureLoader().load(imageSrc);
-      const mat = new THREE.MeshBasicMaterial({
-        map:         texture,
-        side:        THREE.DoubleSide,
-        transparent: true,
-        alphaTest:   0.1
-      });
-
-      const mesh = new THREE.Mesh(geo, mat);
-      // Rotate flat to lie on the surface
-      mesh.rotation.x = -Math.PI / 2;
-      return mesh;
-    }
-
-    // ── Render loop — runs 60 times per second ────────────
-    let referenceSpace;
-
-    function renderFrame(frame) {
-      if (!frame) return;
-
-      // Get reference space on first frame
-      if (!referenceSpace) {
-        renderer.xr.getSession().requestReferenceSpace("local").then(space => {
-          referenceSpace = space;
-        });
-        return;
+    // ─────────────────────────────────────────────────────
+    // DEVICE ORIENTATION — reads phone tilt 60x per second
+    // ─────────────────────────────────────────────────────
+    function requestOrientationPermission() {
+      if (typeof DeviceOrientationEvent !== "undefined" &&
+          typeof DeviceOrientationEvent.requestPermission === "function") {
+        // iOS 13+ — needs explicit permission
+        DeviceOrientationEvent.requestPermission()
+          .then(state => {
+            if (state === "granted") startOrientationListener();
+          })
+          .catch(() => startOrientationListener());
+      } else {
+        // Android — no permission needed
+        startOrientationListener();
       }
+    }
 
-      // Get hit test results — where is the surface?
-      if (hitTestSource && referenceSpace) {
-        const results = frame.getHitTestResults(hitTestSource);
+    function startOrientationListener() {
+      window.addEventListener("deviceorientation", function(e) {
+        if (e.beta  !== null) currentBeta  = e.beta;
+        if (e.gamma !== null) currentGamma = e.gamma;
+        if (e.alpha !== null) currentAlpha = e.alpha;
 
-        if (results.length > 0) {
-          // Surface detected!
-          const hit  = results[0];
-          const pose = hit.getPose(referenceSpace);
+        // Only update pizza position AFTER it has been placed
+        if (pizzaPlaced) updatePizzaPosition();
 
-          // Move reticle to detected surface position
-          reticle.visible = true;
-          reticle.matrix.fromArray(pose.transform.matrix);
+        // Auto-adjust the tilt angle of the pizza image
+        // based on how the phone is held
+        adjustPizzaTilt(e.beta);
 
-          // Update instruction
-          if (!pizzaPlaced) {
-            document.getElementById("instructions").textContent =
-              "✅ Surface found!  Tap to place pizza here";
-          }
-        } else {
-          // No surface detected
-          reticle.visible = false;
-          if (!pizzaPlaced) {
-            document.getElementById("instructions").textContent =
-              "🔍 Move phone slowly over the table";
-          }
-        }
+      }, true);
+    }
+
+    // ─────────────────────────────────────────────────────
+    // AUTO-ADJUST PIZZA TILT
+    //
+    // Makes the pizza look more realistic based on phone angle:
+    //   Phone upright (beta ~90°)  → pizza looks more perspective-y
+    //   Phone angled down (beta ~130°) → pizza looks flatter
+    // ─────────────────────────────────────────────────────
+    function adjustPizzaTilt(beta) {
+      if (!beta) return;
+      // Clamp beta to useful range
+      const b       = Math.min(Math.max(beta, 75), 155);
+      // Map to rotateX range: 38° (more upright) to 65° (very flat)
+      const rotateX = 38 + ((b - 75) / 80) * 27;
+      pizzaImg.style.transform = "rotateX(" + rotateX.toFixed(1) + "deg)";
+    }
+
+    // ─────────────────────────────────────────────────────
+    // UPDATE PIZZA POSITION — called every gyroscope tick
+    //
+    // Moves the pizza wrapper to compensate for phone movement
+    // so the pizza appears anchored to the table surface
+    // ─────────────────────────────────────────────────────
+    function updatePizzaPosition() {
+      // How much has the phone rotated since we placed the pizza?
+      const deltaBeta  = currentBeta  - anchorBeta;
+      const deltaGamma = currentGamma - anchorGamma;
+
+      // Convert rotation to pixel offset
+      // Negative delta = phone tilted toward floor = pizza moves up on screen
+      const offsetX = deltaGamma * SENSITIVITY_X;
+      const offsetY = deltaBeta  * SENSITIVITY_Y;
+
+      // New screen position = original tap position + compensation offset
+      const newX = anchorX + offsetX;
+      const newY = anchorY - offsetY;  // minus because screen Y is inverted
+
+      // Clamp so pizza never goes fully off screen
+      const clampedX = Math.min(Math.max(newX, 60),  window.innerWidth  - 60);
+      const clampedY = Math.min(Math.max(newY, 100), window.innerHeight - 140);
+
+      pizzaWrap.style.left = clampedX + "px";
+      pizzaWrap.style.top  = clampedY + "px";
+    }
+
+    // ─────────────────────────────────────────────────────
+    // TAP TO PLACE PIZZA
+    // ─────────────────────────────────────────────────────
+    function handleTap(clientX, clientY) {
+      // Record where they tapped
+      anchorX = clientX;
+      anchorY = clientY;
+
+      // Record phone angle at this exact moment
+      anchorBeta  = currentBeta;
+      anchorGamma = currentGamma;
+      anchorAlpha = currentAlpha;
+
+      // Place pizza at tap position
+      pizzaWrap.style.left    = anchorX + "px";
+      pizzaWrap.style.top     = anchorY + "px";
+      pizzaWrap.style.display = "block";
+
+      // Hide the pulsing ring — pizza is placed
+      ringEl.style.display = "none";
+
+      if (!pizzaPlaced) {
+        pizzaPlaced = true;
+        instrEl.textContent = "Move phone around — pizza stays on table  ·  Pinch to resize";
       }
-
-      renderer.render(scene, camera);
     }
 
-    // ── Tap to place pizza on surface ─────────────────────
-    function onTap() {
-      if (!reticle.visible) return;
+    // Touch (phone)
+    document.addEventListener("touchstart", function(e) {
+      if (e.target.closest("button")) return;
+      if (document.getElementById("start-screen").style.display !== "none") return;
+      const t = e.touches[0];
+      handleTap(t.clientX, t.clientY);
+    }, { passive: true });
 
-      // Get position where reticle is sitting (on the table)
-      const position = new THREE.Vector3();
-      position.setFromMatrixPosition(reticle.matrix);
+    // Click (desktop testing in browser)
+    document.addEventListener("click", function(e) {
+      if (e.target.closest("button")) return;
+      if (document.getElementById("start-screen").style.display !== "none") return;
+      handleTap(e.clientX, e.clientY);
+    });
 
-      // Move pizza to that exact surface position
-      pizzaMesh.position.copy(position);
-      pizzaMesh.visible = true;
-
-      pizzaPlaced = true;
-      document.getElementById("instructions").textContent =
-        "Tap to move  ·  Use Switch Pizza to change";
-    }
-
-    // ── Switch pizza ──────────────────────────────────────
+    // ─────────────────────────────────────────────────────
+    // SWITCH PIZZA
+    // ─────────────────────────────────────────────────────
     function switchPizza() {
       currentIndex = (currentIndex + 1) % pizzas.length;
       const p = pizzas[currentIndex];
 
-      // Update the pizza image texture
-      if (pizzaMesh) {
-        const texture = new THREE.TextureLoader().load(p.image);
-        pizzaMesh.material.map = texture;
-        pizzaMesh.material.needsUpdate = true;
+      // Fade out → swap image → fade in
+      pizzaImg.style.opacity = "0";
+      setTimeout(() => {
+        pizzaImg.src        = p.image;
+        labelEl.textContent = p.name;
+        ingEl.textContent   = p.ingredients;
+        pizzaImg.style.opacity = "1";
+      }, 300);
+    }
+
+    // ─────────────────────────────────────────────────────
+    // PINCH TO RESIZE
+    // ─────────────────────────────────────────────────────
+    let lastPinchDist = null;
+    let currentSize   = 260;
+
+    document.addEventListener("touchmove", function(e) {
+      if (e.touches.length === 2) {
+        const dx   = e.touches[0].clientX - e.touches[1].clientX;
+        const dy   = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (lastPinchDist !== null) {
+          const ratio = dist / lastPinchDist;
+          currentSize = Math.min(Math.max(currentSize * ratio, 80), 520);
+          pizzaImg.style.width  = currentSize + "px";
+          pizzaImg.style.height = currentSize + "px";
+        }
+        lastPinchDist = dist;
       }
+    }, { passive: true });
 
-      document.getElementById("pizza-label").textContent = p.name;
-      document.getElementById("ingredients").textContent = p.ingredients;
-    }
-
-    // ── Show no-WebXR screen ──────────────────────────────
-    function showNoWebXR() {
-      document.getElementById("start-screen").style.display = "none";
-      document.getElementById("no-webxr").style.display     = "flex";
-    }
-
-    // ── FALLBACK: simple camera overlay for older iPhones ─
-    let fbIndex = 0;
-    async function startFallback() {
-      document.getElementById("no-webxr").style.display = "none";
-
-      const cam = document.getElementById("fallback-camera");
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false
-        });
-        cam.srcObject = stream;
-        cam.style.display = "block";
-        document.getElementById("fallback-ui").style.display = "block";
-
-        // Tap to move pizza
-        document.addEventListener("touchstart", function(e) {
-          if (e.target.closest("button")) return;
-          const t = e.touches[0];
-          const fp = document.getElementById("fallback-pizza");
-          fp.style.display = "block";
-          fp.style.left    = t.clientX + "px";
-          fp.style.top     = t.clientY + "px";
-        }, { passive: true });
-
-        // Auto-tilt based on device angle
-        window.addEventListener("deviceorientation", function(e) {
-          if (!e.beta) return;
-          const beta    = Math.min(Math.max(e.beta, 70), 150);
-          const rotateX = 45 + ((beta - 70) / 80) * 35;
-          document.getElementById("fallback-img").style.transform =
-            "rotateX(" + rotateX + "deg)";
-        }, true);
-
-      } catch(err) {
-        alert("Camera access denied. Please allow camera in Settings.");
-      }
-    }
-
-    function switchPizzaFB() {
-      fbIndex = (fbIndex + 1) % pizzas.length;
-      const p = pizzas[fbIndex];
-      document.getElementById("fallback-img").src            = p.image;
-      document.getElementById("pizza-label-fb").textContent  = p.name;
-      document.getElementById("ing-fb").textContent          = p.ingredients;
-    }
+    document.addEventListener("touchend", function(e) {
+      if (e.touches.length < 2) lastPinchDist = null;
+    }, { passive: true });
 
   </script>
 </body>
