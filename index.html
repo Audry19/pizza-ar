@@ -13,80 +13,44 @@
   </script>
 
   <style>
-    * {
-      margin: 0; padding: 0; box-sizing: border-box;
-      touch-action: manipulation;
-    }
-    html, body {
-      width: 100%; height: 100%;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-      background: #000;
-    }
-    canvas {
-      position: fixed !important;
-      top: 0 !important; left: 0 !important;
-      width: 100% !important; height: 100% !important;
-    }
-    #ui {
-      position: fixed; inset: 0;
-      z-index: 999;
-      pointer-events: none;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: Arial, sans-serif; background: #000; }
+    canvas { position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; }
+
+    #ui { position: fixed; inset: 0; z-index: 999; pointer-events: none; }
+
     #pizza-label {
-      position: absolute;
-      top: 28px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.78);
-      color: white;
-      padding: 10px 28px;
-      border-radius: 40px;
-      font-size: 18px; font-weight: bold;
-      white-space: nowrap;
+      position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.78); color: white;
+      padding: 10px 28px; border-radius: 40px;
+      font-size: 18px; font-weight: bold; white-space: nowrap;
     }
     #ingredients {
-      position: absolute;
-      top: 82px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.55);
-      color: #ffd166;
-      padding: 6px 18px;
-      border-radius: 20px;
+      position: absolute; top: 82px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.55); color: #ffd166;
+      padding: 6px 18px; border-radius: 20px;
       font-size: 12px; white-space: nowrap;
     }
     #debug {
-      position: absolute;
-      top: 122px; left: 10px; right: 10px;
-      background: rgba(0,0,0,0.85);
-      color: #00ff88;
-      padding: 6px 14px;
-      border-radius: 12px;
+      position: absolute; top: 122px; left: 10px; right: 10px;
+      background: rgba(0,0,0,0.85); color: #00ff88;
+      padding: 6px 14px; border-radius: 12px;
       font-size: 11px; text-align: center;
     }
     #instructions {
-      position: absolute;
-      bottom: 140px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.65);
-      color: white;
-      padding: 12px 24px;
-      border-radius: 30px;
-      font-size: 14px; text-align: center;
-      width: 85%; line-height: 1.5;
+      position: absolute; bottom: 140px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.65); color: white;
+      padding: 12px 24px; border-radius: 30px;
+      font-size: 14px; text-align: center; width: 85%; line-height: 1.5;
     }
     #btn-row {
-      position: absolute;
-      bottom: 54px; left: 50%;
-      transform: translateX(-50%);
-      display: flex; gap: 14px;
-      pointer-events: all;
+      position: absolute; bottom: 54px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 14px; pointer-events: all;
     }
     .btn {
-      color: white; border: none;
-      padding: 15px 28px; border-radius: 40px;
-      font-size: 15px; font-weight: bold;
-      cursor: pointer; white-space: nowrap;
-      touch-action: manipulation;
+      color: white; border: none; padding: 15px 28px;
+      border-radius: 40px; font-size: 15px; font-weight: bold;
+      cursor: pointer; white-space: nowrap; touch-action: manipulation;
     }
     #move-btn   { background: #2b9348; }
     #switch-btn { background: #e63946; }
@@ -105,53 +69,35 @@
     </div>
   </div>
 
-  <!--
-    ════════════════════════════════════════════════════════
-    CRITICAL: This script must come BEFORE bundle.js.
-    bundle.js calls XR8.run() which starts the pipeline.
-    We must register our module BEFORE that happens
-    so our onStart and onProcessCpu callbacks fire correctly.
-    ════════════════════════════════════════════════════════
-  -->
   <script>
+    // ══════════════════════════════════════════════════════
+    // THIS SCRIPT RUNS BEFORE bundle.js — module registered
+    // before XR8.run() is called inside bundle.js
+    // ══════════════════════════════════════════════════════
 
-    // ── State ─────────────────────────────────────────────
     const pizzas = [
-      {
-        name:        "Pepperoni Pizza",
-        asset:       "assets/1.png",
-        ingredients: "Tomato sauce · Pepperoni · Mozzarella · Oregano"
-      },
-      {
-        name:        "BBQ Chicken Pizza",
-        asset:       "assets/2.png",
-        ingredients: "BBQ sauce · Chicken · Olives · Bell peppers"
-      },
-      {
-        name:        "Margherita Pizza",
-        asset:       "assets/3.png",
-        ingredients: "Tomato sauce · Fresh mozzarella · Basil · Olive oil"
-      }
+      { name: "Pepperoni Pizza",   asset: "assets/1.png", ingredients: "Tomato sauce · Pepperoni · Mozzarella · Oregano" },
+      { name: "BBQ Chicken Pizza", asset: "assets/2.png", ingredients: "BBQ sauce · Chicken · Olives · Bell peppers" },
+      { name: "Margherita Pizza",  asset: "assets/3.png", ingredients: "Tomato sauce · Fresh mozzarella · Basil · Olive oil" }
     ];
 
     let currentIndex  = 0;
-    let pizzaMesh     = null;   // THREE.Mesh — set by onProcessCpu
-    let meshFixed     = false;  // true after MeshBasicMaterial applied
+    let pizzaMesh     = null;
+    let threeScene    = null;   // kept so switchPizza can search it
+    let lightingFixed = false;
     let waitingToMove = false;
-    let currentScale  = 2.0;   // start at 2x — bigger and more visible
+    let currentScale  = 2.0;
     let lastPinchDist = null;
+    let frameCount    = 0;
 
     const labelEl = document.getElementById("pizza-label");
     const ingEl   = document.getElementById("ingredients");
     const instrEl = document.getElementById("instructions");
     const debugEl = document.getElementById("debug");
 
-    function dbg(msg) {
-      console.log("[Pizza]", msg);
-      debugEl.textContent = msg;
-    }
+    function dbg(msg) { console.log(msg); debugEl.textContent = msg; }
 
-    // ── Block double-tap zoom ─────────────────────────────
+    // Block double-tap zoom
     let lastTap = 0;
     document.addEventListener("touchend", (e) => {
       const now = Date.now();
@@ -159,116 +105,163 @@
       lastTap = now;
     }, { passive: false });
 
-    // ── Register XR8 pipeline module ──────────────────────
-    // We do this inside xrloaded which fires when xr.js is ready.
-    // Because this script tag is BEFORE bundle.js, our handler
-    // runs first — our module is registered before bundle.js
-    // calls XR8.run(), so our callbacks are guaranteed to fire.
+    // ── Get Three.js scene safely ─────────────────────────
+    function getScene() {
+      try {
+        const xs = XR8.Threejs.xrScene();
+        if (!xs) return null;
+        if (xs.scene && xs.scene.traverse) return xs.scene;
+        if (xs.traverse) return xs;
+        return null;
+      } catch(e) { return null; }
+    }
 
+    // ── Find pizza mesh — ANY mesh, texture not required ──
+    // KEY FIX: old code required obj.material.map (texture)
+    // but textures load async — mesh exists before texture does.
+    // We now grab ANY mesh, then fix texture/lighting separately.
+    function findPizzaMesh(scene) {
+      const meshes = [];
+      scene.traverse(obj => {
+        if (obj.isMesh && obj.material) meshes.push(obj);
+      });
+
+      dbg("Meshes: " + meshes.length + " | " +
+          meshes.map(m => m.name || "unnamed").join(", "));
+
+      if (meshes.length === 0) return null;
+
+      // Prefer mesh with a texture, fall back to any mesh
+      return meshes.find(m => m.material.map) || meshes[0];
+    }
+
+    // ── Fix lighting — MeshBasicMaterial ──────────────────
+    function fixLighting(mesh) {
+      const tex = mesh.material.map || null;
+      mesh.material = new THREE.MeshBasicMaterial({
+        map:         tex,
+        transparent: true,
+        alphaTest:   0.05,
+        side:        THREE.DoubleSide,
+        depthWrite:  false
+      });
+      mesh.material.needsUpdate = true;
+      mesh.scale.set(currentScale, currentScale, currentScale);
+      dbg("✅ Lighting fixed. Pizza size: " + currentScale + "x");
+    }
+
+    // ── XR8 Pipeline Module ───────────────────────────────
     window.addEventListener("xrloaded", () => {
-      dbg("XR8 ready — registering module...");
+      dbg("Registering module...");
 
       XR8.addCameraPipelineModule({
         name: "pizza-module",
 
-        // ── onProcessCpu fires EVERY FRAME ────────────────
-        // This is the most reliable hook in the XR8 pipeline.
-        // We use it to find the pizza mesh (runs until found)
-        // and to fix the lighting once.
-        onProcessCpu: ({ frameStartResult }) => {
+        onProcessCpu: () => {
+          frameCount++;
 
-          // Once mesh is found and fixed, do nothing each frame
-          if (meshFixed) return;
-
-          // Try to get the Three.js scene
-          let scene = null;
-          try {
-            const xs = XR8.Threejs.xrScene();
-            scene = (xs && xs.scene) ? xs.scene : xs;
-          } catch (e) {
-            return; // not ready yet, try next frame
+          // Try to get scene every frame until we have everything
+          if (!threeScene) {
+            threeScene = getScene();
+            if (!threeScene) return;
+            dbg("Scene acquired on frame " + frameCount);
           }
 
-          if (!scene || !scene.traverse) return;
+          // Try to find mesh every frame until found
+          if (!pizzaMesh) {
+            pizzaMesh = findPizzaMesh(threeScene);
+            if (!pizzaMesh) return;
+            dbg("Mesh found on frame " + frameCount +
+                " | has texture: " + !!pizzaMesh.material.map);
+          }
 
-          // Traverse scene looking for a mesh with a texture
-          scene.traverse((obj) => {
-            if (meshFixed) return;
-            if (!obj.isMesh) return;
-            if (!obj.material) return;
-            if (!obj.material.map) return; // must have texture
-
-            // Found the pizza plane!
-            pizzaMesh = obj;
-            dbg("✅ Mesh found — applying fixes...");
-
-            // ── FIX 1: Lighting ───────────────────────────
-            // Replace with MeshBasicMaterial.
-            // This material ignores ALL scene lights entirely.
-            // Pizza always shows its true colors.
-            const tex = obj.material.map;
-
-            obj.material = new THREE.MeshBasicMaterial({
-              map:         tex,
-              transparent: true,
-              alphaTest:   0.05,
-              side:        THREE.DoubleSide,
-              depthWrite:  false
-            });
-            obj.material.needsUpdate = true;
-
-            // ── FIX 2: Size — make pizza bigger ───────────
-            // Default scale from Desktop app is often too small.
-            // Set to 2x to make it a realistic pizza size.
-            obj.scale.set(currentScale, currentScale, currentScale);
-
-            meshFixed = true;
-            dbg("✅ All fixes applied — pizza ready!");
-            instrEl.textContent = "🔍 Move phone over table to detect surface";
-          });
+          // Fix lighting once — but wait until texture is loaded
+          // so MeshBasicMaterial gets the correct map
+          if (!lightingFixed) {
+            // If mesh has no texture yet, wait one more frame
+            if (!pizzaMesh.material.map) {
+              dbg("Waiting for texture to load...");
+              return;
+            }
+            fixLighting(pizzaMesh);
+            lightingFixed = true;
+            instrEl.textContent = "🔍 Move phone slowly over the table";
+          }
         },
 
-        // onUpdate fires after pose is updated each frame
-        // Use it to update the instruction text
         onUpdate: () => {
-          if (meshFixed && instrEl.textContent.includes("Move phone")) {
-            instrEl.textContent = "✅ Surface found — tap 📍 Move then tap table";
+          if (lightingFixed && instrEl.textContent.includes("Move phone")) {
+            instrEl.textContent = "✅ Surface found — press 📍 Move then tap table";
           }
         }
       });
 
-      dbg("Module registered — waiting for scene...");
+      dbg("Module registered. Waiting for scene...");
     });
 
   </script>
 
-  <!--
-    bundle.js comes AFTER our module registration above.
-    It calls XR8.run() which starts the pipeline and
-    triggers our onProcessCpu callbacks each frame.
-  -->
+  <!-- bundle.js AFTER our module registration -->
   <script src="bundle.js"></script>
 
-  <!--
-    UI interaction logic — also after bundle.js
-    but pizzaMesh is set by the pipeline module above
-    so these functions will always have access to it.
-  -->
   <script>
+
+    // ── Switch pizza ──────────────────────────────────────
+    // KEY FIX: even if pizzaMesh is null, we search the scene
+    // directly right now — guarantees we always find it
+    function switchPizza() {
+      currentIndex = (currentIndex + 1) % pizzas.length;
+      const p = pizzas[currentIndex];
+
+      labelEl.textContent = p.name;
+      ingEl.textContent   = p.ingredients;
+      dbg("Switching to: " + p.name);
+
+      // If pizzaMesh not set yet, search scene right now
+      if (!pizzaMesh && threeScene) {
+        pizzaMesh = findPizzaMesh(threeScene);
+        dbg(pizzaMesh ? "Found mesh on switch" : "Still no mesh");
+      }
+
+      if (!pizzaMesh) {
+        dbg("⚠️ No mesh found — scene may still be starting");
+        return;
+      }
+
+      // Load and apply the new pizza texture
+      new THREE.TextureLoader().load(
+        p.asset,
+        (tex) => {
+          // flipY false = correct orientation for 8th Wall
+          tex.flipY = false;
+          pizzaMesh.material.map = tex;
+          pizzaMesh.material.needsUpdate = true;
+          dbg("✅ Texture applied: " + p.name);
+        },
+        undefined,
+        () => dbg("❌ Failed to load: " + p.asset)
+      );
+    }
 
     // ── Move button ───────────────────────────────────────
     function startMove() {
+      // Search scene directly if pizzaMesh still null
+      if (!pizzaMesh && threeScene) {
+        pizzaMesh = findPizzaMesh(threeScene);
+      }
+
       if (!pizzaMesh) {
-        dbg("Still loading — wait for '✅ All fixes applied'");
-        instrEl.textContent = "⚠️ Still loading — try again in a moment";
+        instrEl.textContent = "⚠️ Still loading — wait for surface detection";
+        dbg("⚠️ No mesh yet for move");
         return;
       }
+
       waitingToMove = true;
-      instrEl.textContent = "👆 Tap anywhere on the table to move the pizza";
-      dbg("Waiting for tap to reposition...");
+      instrEl.textContent = "👆 Tap the table where you want the pizza";
+      dbg("Ready for tap to move...");
     }
 
-    // ── Tap to move ───────────────────────────────────────
+    // ── Tap to reposition ─────────────────────────────────
     document.addEventListener("touchend", (e) => {
       if (e.changedTouches.length !== 1) return;
       if (e.target.closest(".btn")) return;
@@ -280,62 +273,29 @@
       const x = t.clientX / window.innerWidth;
       const y = t.clientY / window.innerHeight;
 
-      dbg("Running hit test at " + x.toFixed(2) + ", " + y.toFixed(2) + "...");
+      dbg("Hit test at " + x.toFixed(2) + ", " + y.toFixed(2));
 
       try {
         const hits = XR8.XrController.hitTest(x, y, {
-          includedTypes: [
-            "FEATURE_POINT",
-            "ESTIMATED_SURFACE",
-            "DETECTED_SURFACE"
-          ]
+          includedTypes: ["FEATURE_POINT", "ESTIMATED_SURFACE", "DETECTED_SURFACE"]
         });
 
         if (hits && hits.length > 0) {
           const h = hits[0];
           pizzaMesh.position.set(h.position.x, h.position.y, h.position.z);
           waitingToMove = false;
-          instrEl.textContent = "✅ Pizza moved!  Tap 📍 Move anytime to reposition";
-          dbg("✅ Moved to " + h.position.x.toFixed(2) + ", " + h.position.z.toFixed(2));
+          instrEl.textContent = "✅ Pizza moved!  Press 📍 Move to reposition again";
+          dbg("✅ Moved to surface");
         } else {
-          instrEl.textContent = "⚠️ No surface found — point camera at table and tap";
-          dbg("⚠️ Hit test returned 0 results");
+          instrEl.textContent = "⚠️ No surface found — aim at table and tap again";
+          dbg("Hit test: 0 results");
         }
-
       } catch (err) {
-        instrEl.textContent = "⚠️ Still scanning — move phone slowly over table";
-        dbg("Hit test error: " + err.message);
+        instrEl.textContent = "⚠️ Keep scanning — move phone slowly over table";
+        dbg("Hit error: " + err.message);
       }
 
     }, { passive: false });
-
-    // ── Switch pizza ──────────────────────────────────────
-    function switchPizza() {
-      currentIndex = (currentIndex + 1) % pizzas.length;
-      const p = pizzas[currentIndex];
-
-      labelEl.textContent = p.name;
-      ingEl.textContent   = p.ingredients;
-
-      if (!pizzaMesh) {
-        dbg("Labels updated — mesh loading, texture will update shortly");
-        return;
-      }
-
-      dbg("Loading: " + p.asset);
-
-      new THREE.TextureLoader().load(
-        p.asset,
-        (tex) => {
-          tex.flipY = false;
-          pizzaMesh.material.map = tex;
-          pizzaMesh.material.needsUpdate = true;
-          dbg("✅ Switched to: " + p.name);
-        },
-        undefined,
-        () => dbg("❌ Could not load: " + p.asset)
-      );
-    }
 
     // ── Pinch to resize ───────────────────────────────────
     document.addEventListener("touchmove", (e) => {
@@ -350,10 +310,9 @@
         const ratio  = dist / lastPinchDist;
         currentScale = Math.min(Math.max(currentScale * ratio, 0.3), 6.0);
         pizzaMesh.scale.set(currentScale, currentScale, currentScale);
-        dbg("Size: " + currentScale.toFixed(1) + "x");
+        dbg("Scale: " + currentScale.toFixed(1) + "x");
       }
       lastPinchDist = dist;
-
     }, { passive: false });
 
     document.addEventListener("touchend", (e) => {
