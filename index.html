@@ -1,15 +1,28 @@
-<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pizza AR Menu</title><script crossorigin="anonymous" src="./external/runtime/runtime.js"></script><script crossorigin="anonymous" src="./external/xr/xr.js" async="true" data-preload-chunks="slam"></script><style>* { margin: 0; padding: 0; box-sizing: border-box; }
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pizza AR Menu</title>
+
+  <script crossorigin="anonymous" src="./external/runtime/runtime.js"></script>
+  <script crossorigin="anonymous"
+          src="./external/xr/xr.js"
+          async="true"
+          data-preload-chunks="slam">
+  </script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; font-family: Arial, sans-serif; }
 
-    /* ── All UI sits on top of the AR camera view ── */
     #ui {
       position: fixed;
       inset: 0;
       z-index: 999;
-      pointer-events: none; /* lets AR taps pass through */
+      pointer-events: none;
     }
 
-    /* Pizza name — top center */
     #pizza-label {
       position: absolute;
       top: 28px;
@@ -24,7 +37,6 @@
       white-space: nowrap;
     }
 
-    /* Ingredients — just below the name */
     #ingredients {
       position: absolute;
       top: 82px;
@@ -38,10 +50,9 @@
       white-space: nowrap;
     }
 
-    /* Instruction bubble — bottom center above button */
     #instructions {
       position: absolute;
-      bottom: 130px;
+      bottom: 140px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(0,0,0,0.65);
@@ -54,40 +65,76 @@
       line-height: 1.5;
     }
 
-    /* Switch pizza button — needs pointer-events to be tappable */
-    #switch-btn {
+    #btn-row {
       position: absolute;
       bottom: 50px;
       left: 50%;
       transform: translateX(-50%);
-      background: #e63946;
-      color: white;
-      border: none;
-      padding: 16px 44px;
-      border-radius: 40px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
+      display: flex;
+      gap: 12px;
       pointer-events: all;
-      box-shadow: 0 4px 18px rgba(230,57,70,0.4);
-      white-space: nowrap;
     }
 
-    #switch-btn:active {
-      transform: translateX(-50%) scale(0.96);
-    }</style></head><body><div id="ui"><div id="pizza-label">Pepperoni Pizza</div><div id="ingredients">Tomato sauce · Pepperoni · Mozzarella · Oregano · Basil</div><div id="instructions">🔍 Move phone slowly over the table</div><button id="switch-btn" onclick="switchPizza()">Switch Pizza ↺</button></div><script src="bundle.js"></script><script>// ── Pizza data ─────────────────────────────────────────
-    // Images are named 1.png, 2.png, 3.png in your assets folder
-    // Match these to your actual pizza images
+    .btn {
+      color: white;
+      border: none;
+      padding: 14px 26px;
+      border-radius: 40px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn:active { opacity: 0.8; }
+
+    #move-btn   { background: #2b9348; }
+    #switch-btn { background: #e63946; }
+
+    /* Debug bar — remove after testing */
+    #debug {
+      position: absolute;
+      top: 130px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: #00ff88;
+      padding: 6px 14px;
+      border-radius: 12px;
+      font-size: 11px;
+      white-space: nowrap;
+      max-width: 95vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="ui">
+    <div id="pizza-label">Pepperoni Pizza</div>
+    <div id="ingredients">Tomato sauce · Pepperoni · Mozzarella · Oregano</div>
+    <div id="debug">⏳ Waiting for scene...</div>
+    <div id="instructions">🔍 Move phone over the table</div>
+    <div id="btn-row">
+      <button class="btn" id="move-btn"   onclick="startMove()">📍 Move</button>
+      <button class="btn" id="switch-btn" onclick="switchPizza()">🍕 Switch</button>
+    </div>
+  </div>
+
+  <script src="bundle.js"></script>
+
+  <script>
+    // ── Pizza data ─────────────────────────────────────────
     const pizzas = [
       {
         name:        "Pepperoni Pizza",
         asset:       "assets/1.png",
-        ingredients: "Tomato sauce · Pepperoni · Mozzarella · Oregano · Basil"
+        ingredients: "Tomato sauce · Pepperoni · Mozzarella · Oregano"
       },
       {
         name:        "BBQ Chicken Pizza",
         asset:       "assets/2.png",
-        ingredients: "BBQ sauce · Chicken · Olives · Bell peppers · Mozzarella"
+        ingredients: "BBQ sauce · Chicken · Olives · Bell peppers"
       },
       {
         name:        "Margherita Pizza",
@@ -96,59 +143,197 @@
       }
     ];
 
-    let currentIndex = 0;
+    let currentIndex    = 0;
+    let pizzaMesh       = null;
+    let waitingToMove   = false;
+    let currentScale    = 1.0;
+    let lastPinchDist   = null;
 
     const labelEl = document.getElementById("pizza-label");
     const ingEl   = document.getElementById("ingredients");
     const instrEl = document.getElementById("instructions");
+    const debugEl = document.getElementById("debug");
 
-    // ── Listen for 8th Wall surface detection events ────────
-    // Updates the instruction text when surface is found
-    window.addEventListener("xrupdated", function() {
-      if (instrEl.textContent.includes("Move phone")) {
-        instrEl.textContent = "✅ Surface found! Tap to place pizza";
+    function dbg(msg) { debugEl.textContent = msg; }
+
+    // ── STEP 1: Find the pizza mesh ────────────────────────
+    // bundle.js builds the scene asynchronously.
+    // We poll every 500ms until we find a mesh with a texture.
+    // Once found, we replace its material with MeshBasicMaterial
+    // (completely unlit — not affected by any scene lighting).
+
+    function findAndFixMesh() {
+      try {
+        const { scene } = XR8.Threejs.xrScene();
+        const meshes = [];
+
+        scene.traverse(obj => {
+          if (obj.isMesh) meshes.push(obj);
+        });
+
+        dbg("Meshes found: " + meshes.length);
+
+        if (meshes.length === 0) {
+          // Scene not populated yet — try again in 500ms
+          setTimeout(findAndFixMesh, 500);
+          return;
+        }
+
+        // Pick the mesh that has a texture map (our pizza plane)
+        // If multiple meshes exist, find the one with a texture
+        let target = meshes.find(m => m.material && m.material.map);
+
+        // If none have a texture yet, just take the first mesh
+        if (!target) target = meshes[0];
+
+        pizzaMesh = target;
+        dbg("✅ Pizza mesh found. Fixing lighting...");
+
+        // ── FIX LIGHTING ──────────────────────────────────
+        // MeshBasicMaterial ignores ALL lights in the scene.
+        // The pizza will show its exact true colors always.
+        const existingMap = pizzaMesh.material.map || null;
+
+        pizzaMesh.material = new THREE.MeshBasicMaterial({
+          map:         existingMap,
+          transparent: true,
+          alphaTest:   0.05,
+          side:        THREE.DoubleSide,
+          depthWrite:  false
+        });
+
+        dbg("✅ Lighting fixed. Surface tracking active.");
+        instrEl.textContent = "🔍 Move phone over the table to detect surface";
+
+      } catch (err) {
+        dbg("Waiting for XR8... " + err.message);
+        setTimeout(findAndFixMesh, 500);
+      }
+    }
+
+    // Start polling after a short delay to let bundle.js run first
+    window.addEventListener("xrloaded", () => {
+      dbg("✅ XR8 loaded. Finding mesh...");
+      setTimeout(findAndFixMesh, 800);
+    });
+
+    // Also update instruction when surface tracking is live
+    window.addEventListener("xrupdated", () => {
+      if (instrEl.textContent.includes("Move phone") && pizzaMesh) {
+        instrEl.textContent = "✅ Surface found — tap to place pizza";
       }
     });
 
-    // When user taps to place, update instruction
-    window.addEventListener("click", function(e) {
-      if (e.target.id === "switch-btn") return;
-      setTimeout(() => {
-        instrEl.textContent = "Tap to move  ·  Pinch to resize";
-      }, 500);
-    });
+    // ── STEP 2: Tap handler ────────────────────────────────
+    // On tap: if waitingToMove is true, run hit test and
+    // move the pizza to wherever the user tapped on the surface.
 
-    // ── Switch pizza function ───────────────────────────────
+    window.addEventListener("touchend", (e) => {
+      if (e.target.closest(".btn")) return;
+      if (!pizzaMesh) return;
+
+      // Only move when user pressed the Move button first
+      if (!waitingToMove) return;
+
+      const touch = e.changedTouches[0];
+
+      // Normalised screen coordinates (0 to 1)
+      const x = touch.clientX / window.innerWidth;
+      const y = touch.clientY / window.innerHeight;
+
+      dbg("Hit testing at " + x.toFixed(2) + ", " + y.toFixed(2));
+
+      try {
+        // XR8 hit test — finds the real surface point at (x,y)
+        const hits = XR8.XrController.hitTest(x, y, {
+          includedTypes: [
+            "FEATURE_POINT",
+            "ESTIMATED_SURFACE",
+            "DETECTED_SURFACE"
+          ]
+        });
+
+        if (hits && hits.length > 0) {
+          const h = hits[0];
+          pizzaMesh.position.set(h.position.x, h.position.y, h.position.z);
+          waitingToMove = false;
+          instrEl.textContent = "✅ Pizza moved!  Tap 📍 Move to reposition";
+          dbg("✅ Moved to: " + h.position.x.toFixed(2) +
+              ", " + h.position.y.toFixed(2) +
+              ", " + h.position.z.toFixed(2));
+        } else {
+          instrEl.textContent = "⚠️ No surface found there — try another spot";
+          dbg("⚠️ Hit test returned 0 results");
+        }
+
+      } catch (err) {
+        instrEl.textContent = "⚠️ Still scanning surface — move phone slowly";
+        dbg("Hit test error: " + err.message);
+      }
+
+    }, { passive: true });
+
+    // ── STEP 3: Move button ────────────────────────────────
+    function startMove() {
+      if (!pizzaMesh) {
+        instrEl.textContent = "⚠️ Scene not ready yet";
+        return;
+      }
+      waitingToMove = true;
+      instrEl.textContent = "👆 Tap the table where you want to move the pizza";
+      dbg("Waiting for tap to reposition...");
+    }
+
+    // ── STEP 4: Switch pizza ───────────────────────────────
     function switchPizza() {
       currentIndex = (currentIndex + 1) % pizzas.length;
       const p = pizzas[currentIndex];
 
-      // Find the pizza plane in the 8th Wall scene
-      // 8th Wall uses Three.js under the hood
-      // We find the mesh and swap its texture
-      try {
-        const renderer  = XR8.Threejs.xrScene();
-        const scene     = renderer.scene;
-
-        // Walk through scene objects to find the plane mesh
-        scene.traverse(function(obj) {
-          if (obj.isMesh && obj.material && obj.material.map) {
-            // Load new pizza texture
-            const loader  = new THREE.TextureLoader();
-            loader.load(p.asset, function(texture) {
-              texture.flipY       = false;
-              obj.material.map    = texture;
-              obj.material.needsUpdate = true;
-            });
-          }
-        });
-
-      } catch(err) {
-        // Scene not ready yet — silently ignore
-        console.log("Scene not ready:", err);
-      }
-
-      // Always update the UI labels immediately
       labelEl.textContent = p.name;
       ingEl.textContent   = p.ingredients;
-    }</script></body></html>
+      dbg("Loading: " + p.asset);
+
+      if (!pizzaMesh || !pizzaMesh.material) {
+        dbg("⚠️ Mesh not ready for texture swap");
+        return;
+      }
+
+      const loader = new THREE.TextureLoader();
+      loader.load(
+        p.asset,
+        (tex) => {
+          tex.flipY = false;
+          pizzaMesh.material.map = tex;
+          pizzaMesh.material.needsUpdate = true;
+          dbg("✅ Texture loaded: " + p.name);
+        },
+        undefined,
+        (err) => dbg("❌ Texture error: " + err)
+      );
+    }
+
+    // ── STEP 5: Pinch to resize ────────────────────────────
+    window.addEventListener("touchmove", (e) => {
+      if (e.touches.length !== 2 || !pizzaMesh) return;
+
+      const dx   = e.touches[0].clientX - e.touches[1].clientX;
+      const dy   = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (lastPinchDist !== null) {
+        const ratio  = dist / lastPinchDist;
+        currentScale = Math.min(Math.max(currentScale * ratio, 0.05), 5.0);
+        pizzaMesh.scale.set(currentScale, currentScale, currentScale);
+        dbg("Scale: " + currentScale.toFixed(2));
+      }
+
+      lastPinchDist = dist;
+    }, { passive: true });
+
+    window.addEventListener("touchend", (e) => {
+      if (e.touches.length < 2) lastPinchDist = null;
+    }, { passive: true });
+
+  </script>
+</body>
+</html>
