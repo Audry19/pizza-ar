@@ -3,92 +3,92 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-  <title>Pizza AR Menu</title>
+  <title>Pizza AR</title>
 
   <script src="./external/runtime/runtime.js"></script>
   <script src="./external/xr/xr.js" async data-preload-chunks="slam"></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: Arial; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: black; font-family: Arial; }
     canvas { position: fixed !important; top: 0; left: 0; width: 100%; height: 100%; }
 
-    #ui { position: fixed; inset: 0; z-index: 999; pointer-events: none; }
+    #ui { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
 
-    #pizza-label {
-      position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.8); color: white;
-      padding: 10px 24px; border-radius: 40px;
+    #title {
+      position: absolute; top: 30px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 30px;
       font-weight: bold;
     }
 
     #ingredients {
       position: absolute; top: 75px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.5); color: #ffd166;
-      padding: 6px 16px; border-radius: 20px;
+      background: rgba(0,0,0,0.5);
+      color: #ffd166;
+      padding: 6px 14px;
+      border-radius: 20px;
       font-size: 12px;
     }
 
     #instructions {
-      position: absolute; bottom: 140px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.6); color: white;
-      padding: 12px 20px; border-radius: 30px;
-    }
-
-    #btn-row {
-      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 10px; pointer-events: all;
-    }
-
-    .btn {
-      padding: 14px 24px;
-      border-radius: 30px;
-      border: none;
-      font-weight: bold;
+      position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
       color: white;
-      cursor: pointer;
+      padding: 12px 20px;
+      border-radius: 25px;
     }
 
-    #move-btn { background: #2b9348; }
-    #switch-btn { background: #e63946; }
+    #switchBtn {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #e63946;
+      color: white;
+      border: none;
+      padding: 14px 26px;
+      border-radius: 30px;
+      font-weight: bold;
+      pointer-events: all;
+    }
   </style>
 </head>
 
 <body>
 
 <div id="ui">
-  <div id="pizza-label">Pepperoni Pizza</div>
-  <div id="ingredients">Tomato sauce · Pepperoni · Mozzarella</div>
+  <div id="title">Pepperoni Pizza</div>
+  <div id="ingredients">Tomato · Pepperoni · Mozzarella</div>
   <div id="instructions">Move phone to detect surface</div>
-
-  <div id="btn-row">
-    <button class="btn" id="move-btn" onclick="startMove()">📍 Move</button>
-    <button class="btn" id="switch-btn" onclick="switchPizza()">🍕 Switch</button>
-  </div>
+  <button id="switchBtn" onclick="switchPizza()">🍕 Switch</button>
 </div>
 
 <script>
 
 const pizzas = [
-  { name: "Pepperoni Pizza", asset: "assets/1.png", ingredients: "Tomato sauce · Pepperoni · Mozzarella" },
-  { name: "BBQ Chicken Pizza", asset: "assets/2.png", ingredients: "BBQ sauce · Chicken · Olives" },
-  { name: "Margherita Pizza", asset: "assets/3.png", ingredients: "Tomato sauce · Mozzarella · Basil" }
+  { name: "Pepperoni Pizza", asset: "assets/1.png", ingredients: "Tomato · Pepperoni · Mozzarella" },
+  { name: "BBQ Chicken Pizza", asset: "assets/2.png", ingredients: "BBQ · Chicken · Olives" },
+  { name: "Margherita Pizza", asset: "assets/3.png", ingredients: "Tomato · Mozzarella · Basil" }
 ];
 
 let currentIndex = 0;
-let pizzaMesh = null;
-let pizzaRoot = null;
-let sceneRef = null;
 
-let waitingToMove = false;
-let currentScale = 2;
+let scene = null;
+let pizzaMesh = null;
+let pizzaGroup = null;
+
+let placed = false;
+let currentScale = 1.5;
 let lastPinchDist = null;
 
-const labelEl = document.getElementById("pizza-label");
+const titleEl = document.getElementById("title");
 const ingEl = document.getElementById("ingredients");
 const instrEl = document.getElementById("instructions");
 
-// ───────── Get Scene ─────────
+// ───────── GET SCENE ─────────
 function getScene() {
   try {
     const xr = XR8.Threejs.xrScene();
@@ -98,56 +98,42 @@ function getScene() {
   }
 }
 
-// ───────── Find Mesh ─────────
+// ───────── FIND MESH ─────────
 function findMesh(scene) {
-  let found = null;
+  let mesh = null;
   scene.traverse(obj => {
-    if (!found && obj.isMesh) found = obj;
+    if (!mesh && obj.isMesh) mesh = obj;
   });
-  return found;
+  return mesh;
 }
 
-// ───────── Apply Texture ─────────
-function applyTexture(tex) {
-  if (!pizzaMesh) return;
-
-  tex.flipY = false;
-
-  if (Array.isArray(pizzaMesh.material)) {
-    pizzaMesh.material.forEach(mat => {
-      mat.map = tex;
-      mat.needsUpdate = true;
-    });
-  } else {
-    pizzaMesh.material.map = tex;
-    pizzaMesh.material.needsUpdate = true;
-  }
-}
-
-// ───────── XR Module ─────────
+// ───────── XR INIT ─────────
 window.addEventListener("xrloaded", () => {
 
   XR8.addCameraPipelineModule({
-    name: "pizza-module",
+    name: "pizza-controller",
 
     onUpdate: () => {
-      if (!sceneRef) {
-        sceneRef = getScene();
-      }
 
-      if (sceneRef && !pizzaMesh) {
-        pizzaMesh = findMesh(sceneRef);
+      if (!scene) scene = getScene();
+      if (!scene) return;
+
+      if (!pizzaMesh) {
+        pizzaMesh = findMesh(scene);
+
         if (pizzaMesh) {
-          pizzaRoot = pizzaMesh.parent;
 
-          // Fix lighting
-          pizzaMesh.material = new THREE.MeshBasicMaterial({
-            map: pizzaMesh.material.map,
-            transparent: true,
-            side: THREE.DoubleSide
-          });
+          // ✅ Clone material (fix texture switching)
+          pizzaMesh.material = pizzaMesh.material.clone();
 
-          instrEl.textContent = "Tap Move to reposition";
+          // ✅ Create control group
+          pizzaGroup = new THREE.Group();
+          scene.add(pizzaGroup);
+
+          pizzaGroup.add(pizzaMesh);
+          pizzaMesh.position.set(0, 0, 0);
+
+          instrEl.textContent = "Tap to place pizza";
         }
       }
     }
@@ -155,80 +141,106 @@ window.addEventListener("xrloaded", () => {
 
 });
 
-</script>
-
-<script src="bundle.js"></script>
-
-<script>
-
-// ───────── Switch Pizza ─────────
+// ───────── SWITCH TEXTURE ─────────
 function switchPizza() {
+
   currentIndex = (currentIndex + 1) % pizzas.length;
   const p = pizzas[currentIndex];
 
-  labelEl.textContent = p.name;
+  titleEl.textContent = p.name;
   ingEl.textContent = p.ingredients;
 
-  new THREE.TextureLoader().load(p.asset, tex => {
-    applyTexture(tex);
-  });
-}
+  if (!pizzaMesh) return;
 
-// ───────── Move Mode ─────────
-function startMove() {
-  if (!pizzaRoot) return;
-  waitingToMove = true;
-  instrEl.textContent = "Tap on surface";
-}
-
-// ───────── Tap Move ─────────
-document.addEventListener("touchend", (e) => {
-
-  if (!waitingToMove || !pizzaRoot) return;
-  if (e.target.closest(".btn")) return;
-
-  const t = e.changedTouches[0];
-  const x = t.clientX / window.innerWidth;
-  const y = t.clientY / window.innerHeight;
-
-  const hits = XR8.XrController.hitTest(x, y, {
-    includedTypes: ["ESTIMATED_SURFACE"]
+  new THREE.TextureLoader().load(p.asset, (tex) => {
+    tex.flipY = false;
+    pizzaMesh.material.map = tex;
+    pizzaMesh.material.needsUpdate = true;
   });
 
-  if (hits.length > 0) {
-    const h = hits[0];
-    pizzaRoot.position.set(h.position.x, h.position.y, h.position.z);
+}
 
-    waitingToMove = false;
-    instrEl.textContent = "Moved! Tap Move again";
+// ───────── TAP TO PLACE ─────────
+document.addEventListener("touchstart", (e) => {
+
+  if (!pizzaGroup) return;
+  if (e.target.closest("button")) return;
+
+  if (e.touches.length === 1 && !placed) {
+
+    const t = e.touches[0];
+    const x = t.clientX / window.innerWidth;
+    const y = t.clientY / window.innerHeight;
+
+    const hits = XR8.XrController.hitTest(x, y, {
+      includedTypes: ["ESTIMATED_SURFACE"]
+    });
+
+    if (hits.length > 0) {
+
+      const h = hits[0];
+
+      pizzaGroup.position.set(h.position.x, h.position.y, h.position.z);
+      pizzaGroup.scale.set(currentScale, currentScale, currentScale);
+
+      placed = true;
+      instrEl.textContent = "Drag to move • Pinch to scale";
+    }
   }
 
-}, { passive: false });
+});
 
-// ───────── Pinch Scale ─────────
+// ───────── DRAG + PINCH ─────────
 document.addEventListener("touchmove", (e) => {
 
-  if (e.touches.length !== 2 || !pizzaRoot) return;
+  if (!pizzaGroup || !placed) return;
 
-  const dx = e.touches[0].clientX - e.touches[1].clientX;
-  const dy = e.touches[0].clientY - e.touches[1].clientY;
-  const dist = Math.sqrt(dx*dx + dy*dy);
+  // PINCH
+  if (e.touches.length === 2) {
 
-  if (lastPinchDist) {
-    const ratio = dist / lastPinchDist;
-    currentScale = Math.min(Math.max(currentScale * ratio, 0.5), 5);
-    pizzaRoot.scale.set(currentScale, currentScale, currentScale);
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    if (lastPinchDist) {
+      const ratio = dist / lastPinchDist;
+      currentScale = Math.min(Math.max(currentScale * ratio, 0.5), 5);
+      pizzaGroup.scale.set(currentScale, currentScale, currentScale);
+    }
+
+    lastPinchDist = dist;
+    return;
   }
 
-  lastPinchDist = dist;
+  lastPinchDist = null;
+
+  // DRAG
+  if (e.touches.length === 1) {
+
+    const t = e.touches[0];
+    const x = t.clientX / window.innerWidth;
+    const y = t.clientY / window.innerHeight;
+
+    const hits = XR8.XrController.hitTest(x, y, {
+      includedTypes: ["ESTIMATED_SURFACE"]
+    });
+
+    if (hits.length > 0) {
+      const h = hits[0];
+      pizzaGroup.position.set(h.position.x, h.position.y, h.position.z);
+    }
+  }
 
 }, { passive: false });
 
+// RESET PINCH
 document.addEventListener("touchend", () => {
   lastPinchDist = null;
 });
 
 </script>
+
+<script src="bundle.js"></script>
 
 </body>
 </html>
